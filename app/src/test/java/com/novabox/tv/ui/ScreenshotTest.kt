@@ -23,7 +23,7 @@ import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w960dp-h540dp-land-television-xhdpi")
+@Config(sdk = [33], qualifiers = "w960dp-h540dp-land-television-xhdpi")
 class ScreenshotTest {
     @get:Rule val rule = createComposeRule()
 
@@ -48,7 +48,8 @@ class ScreenshotTest {
     }
 
     private fun save(name: String) {
-        rule.waitForIdle()
+        rule.mainClock.autoAdvance = false
+        repeat(20) { rule.mainClock.advanceTimeBy(100) }
         val bmp = rule.onRoot().captureToImage().asAndroidBitmap()
         val dir = File("build/screens").apply { mkdirs() }
         File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }

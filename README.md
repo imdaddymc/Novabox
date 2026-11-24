@@ -31,7 +31,7 @@ the red, green, yellow or blue buttons.
 
 ## Install on Google TV (sideload)
 
-You need the `NovaBox-debug.apk` file and a phone or computer on the same Wi-Fi network as the TV.
+You need the `NovaBox.apk` file (the optimised build; `NovaBox-debug.apk` also works) and a phone or computer on the same Wi-Fi network as the TV.
 
 1. **Turn on developer mode on the TV.** Settings → System → About → scroll to
    *Android TV OS build* and press OK on it 7 times until it says you're a developer.
@@ -46,7 +46,7 @@ You need the `NovaBox-debug.apk` file and a phone or computer on the same Wi-Fi 
      / *Wireless debugging*, note the TV's IP address, then:
      ```
      adb connect <tv-ip>:5555
-     adb install -r NovaBox-debug.apk
+     adb install -r NovaBox.apk
      ```
      The TV shows a prompt the first time; choose *Allow*.
 4. Open the file and choose **Install**. NovaBox then appears in *Apps* on the home screen.

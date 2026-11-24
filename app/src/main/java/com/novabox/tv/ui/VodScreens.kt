@@ -58,7 +58,7 @@ fun VodScreen(vm: AppViewModel, kind: VodKind) {
     val favs by AppGraph.favorites.vod.collectAsState()
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(Modifier.width(250.dp).fillMaxHeight()) {
+        Column(Modifier.width(210.dp).fillMaxHeight()) {
             SectionTitle("CATEGORIES")
             if (cats.isEmpty()) Text("Loading…", color = Palette.muted)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(4.dp)) {
@@ -106,7 +106,7 @@ private fun VodGrid(vm: AppViewModel, kind: VodKind, cat: String, favs: List<Vod
         return
     }
     LazyVerticalGrid(
-        columns = GridCells.Fixed(6),
+        columns = GridCells.Fixed(5),
         state = state,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),

@@ -1,6 +1,10 @@
 package com.novabox.tv.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -64,21 +68,33 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
     }
 
     // Back from the content jumps to the tab bar; Back on the tab bar leaves the app.
+    var lastBack by remember { mutableStateOf(0L) }
     BackHandler {
-        if (tabsFocused) onExit() else runCatching { tabFocus.getValue(vm.tab).requestFocus() }
+        if (!tabsFocused) {
+            runCatching { tabFocus.getValue(vm.tab).requestFocus() }
+        } else if (System.currentTimeMillis() - lastBack < 2500) {
+            onExit()
+        } else {
+            lastBack = System.currentTimeMillis()
+            vm.showToast("Press Back again to exit")
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, top = 24.dp, bottom = 12.dp),
+            Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, top = 22.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Nova", fontSize = 26.sp, fontWeight = FontWeight.Black, color = Palette.text)
-            Text("Box", fontSize = 26.sp, fontWeight = FontWeight.Black, color = Palette.accent)
-            Spacer(Modifier.width(36.dp))
+            Box(
+                Modifier.size(38.dp).background(Palette.accent, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center,
+            ) { Text("N", fontSize = 22.sp, fontWeight = FontWeight.Black, color = androidx.compose.ui.graphics.Color.White) }
+            Spacer(Modifier.width(20.dp))
             Row(
-                Modifier.weight(1f).onFocusChanged { tabsFocused = it.hasFocus },
-                horizontalArrangement = RowGap,
+                Modifier.weight(1f).onFocusChanged { tabsFocused = it.hasFocus }
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 HomeTab.entries.forEach { t ->
                     FocusSurface(
@@ -90,10 +106,10 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
                         container = androidx.compose.ui.graphics.Color.Transparent,
                         modifier = Modifier.focusRequester(tabFocus.getValue(t)),
                     ) { _ ->
-                        Row(Modifier.padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(t.icon(), null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(t.label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Row(Modifier.padding(horizontal = 14.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(t.icon(), null, Modifier.size(17.dp))
+                            Spacer(Modifier.width(7.dp))
+                            Text(t.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                         }
                     }
                 }
@@ -119,5 +135,5 @@ private fun Clock() {
     LaunchedEffect(Unit) {
         while (true) { now = Date(); kotlinx.coroutines.delay(15_000) }
     }
-    Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), fontSize = 22.sp, color = Palette.muted, fontWeight = FontWeight.Medium)
+    Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), modifier = Modifier.padding(start = 12.dp), fontSize = 20.sp, color = Palette.muted, fontWeight = FontWeight.Medium)
 }

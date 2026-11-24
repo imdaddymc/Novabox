@@ -59,7 +59,7 @@ fun LiveScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         // Categories
-        Column(Modifier.width(250.dp).fillMaxHeight()) {
+        Column(Modifier.width(210.dp).fillMaxHeight()) {
             SectionTitle("CATEGORIES")
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp, horizontal = 4.dp)) {
                 item {
@@ -91,11 +91,11 @@ fun LiveScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                         ) { f ->
                             Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    c.number.toString(), modifier = Modifier.width(48.dp), fontSize = 14.sp,
+                                    c.number.toString(), modifier = Modifier.width(38.dp), fontSize = 13.sp,
                                     color = if (f) Color(0xFF39425A) else Palette.muted,
                                 )
-                                Logo(c.logo, c.name, 40.dp)
-                                Spacer(Modifier.width(14.dp))
+                                Logo(c.logo, c.name, 36.dp)
+                                Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                                     val now = vm.epg[c.id]?.currentProgramme()
@@ -123,7 +123,7 @@ fun LiveScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
         }
 
         // Info / EPG panel
-        Column(Modifier.width(400.dp).fillMaxHeight().padding(top = 26.dp)) {
+        Column(Modifier.width(330.dp).fillMaxHeight().padding(top = 26.dp)) {
             val c = focused ?: list.firstOrNull()
             if (c != null) ChannelInfo(vm, c, favs.any { it.id == c.id }) {
                 onPlay(PlayRequest.Live(list, list.indexOf(c).coerceAtLeast(0)))
@@ -145,12 +145,13 @@ private fun GenreItem(title: String, count: Int, selected: Boolean, onSelect: ()
 @Composable
 private fun ChannelInfo(vm: AppViewModel, c: Channel, isFav: Boolean, onWatch: () -> Unit) {
     val fmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    LaunchedEffect(c.id) { vm.loadEpg(c) }
     Column(
         Modifier.fillMaxWidth().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(22.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Logo(c.logo, c.name, 72.dp)
-            Spacer(Modifier.width(16.dp))
+            Logo(c.logo, c.name, 60.dp)
+            Spacer(Modifier.width(14.dp))
             Column {
                 Text(c.name, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("Channel ${c.number}", color = Palette.muted, fontSize = 14.sp)
@@ -160,7 +161,7 @@ private fun ChannelInfo(vm: AppViewModel, c: Channel, isFav: Boolean, onWatch: (
         Row(horizontalArrangement = RowGap) {
             NovaButton("Watch", onWatch, icon = Icons.Filled.PlayArrow, primary = true)
             NovaButton(
-                if (isFav) "Unfavourite" else "Favourite",
+                if (isFav) "Remove" else "Favourite",
                 { AppGraph.favorites.toggle(c) },
                 icon = Icons.Filled.Star, tint = if (isFav) Palette.gold else null,
             )

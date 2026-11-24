@@ -147,7 +147,7 @@ fun NovaButton(
                 Icon(icon, null, Modifier.size(20.dp), tint = if (!focused && tint != null) tint else LocalContentColor.current)
                 Spacer(Modifier.width(10.dp))
             }
-            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, softWrap = false)
         }
     }
 }

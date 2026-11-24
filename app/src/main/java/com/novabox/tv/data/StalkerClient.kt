@@ -87,7 +87,7 @@ class StalkerClient(val profile: Profile) {
         return out.toList()
     }
 
-    suspend fun login() = loginMutex.withLock {
+    suspend fun login() = withContext(Dispatchers.IO) { loginMutex.withLock {
         val errors = mutableListOf<String>()
         for (ep in candidateEndpoints(profile.portalUrl)) {
             try {
@@ -103,12 +103,12 @@ class StalkerClient(val profile: Profile) {
                 loggedIn = true
                 return@withLock
             } catch (e: Exception) {
-                errors += "${ep}: ${e.message}"
+                errors += "${ep}: ${e.message ?: e.javaClass.simpleName}"
             }
         }
         loggedIn = false
         throw PortalException("Could not log in to the portal. Check the URL and MAC address.\n" + errors.take(3).joinToString("\n"))
-    }
+    } }
 
     private fun getProfile() {
         val metrics = JSONObject().apply {

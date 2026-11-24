@@ -103,7 +103,7 @@ private fun ResultSections(
 @Composable
 private fun ChannelTile(c: Channel, onClick: () -> Unit) {
     FocusSurface(onClick = onClick, focusedScale = 1.08f, modifier = Modifier.width(190.dp)) { _ ->
-        Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Logo(c.logo, c.name, 72.dp)
             Spacer(Modifier.padding(4.dp))
             Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

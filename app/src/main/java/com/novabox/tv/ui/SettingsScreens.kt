@@ -55,11 +55,10 @@ fun SettingsScreen(vm: AppViewModel) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(4.dp)) {
                 items(profiles, key = { it.id }) { p ->
                     val active = p.id == vm.activeProfile?.id
-                    Row(
-                        Modifier.fillMaxWidth().background(if (active) Palette.accent.copy(alpha = 0.15f) else Palette.bg2, RoundedCornerShape(14.dp)).padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        Modifier.fillMaxWidth().background(if (active) Palette.accent.copy(alpha = 0.15f) else Palette.bg2, RoundedCornerShape(14.dp)).padding(18.dp),
                     ) {
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
                             Text(p.name.ifBlank { "Unnamed profile" } + if (active) "  · active" else "", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                             Text(p.portalUrl, fontSize = 13.sp, color = Palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("MAC ${p.mac} · ${p.stbModel}", fontSize = 13.sp, color = Palette.muted)
@@ -76,7 +75,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 }
             }
         }
-        Column(Modifier.width(420.dp).fillMaxHeight().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(22.dp)) {
+        Column(Modifier.width(360.dp).fillMaxHeight().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(22.dp)) {
             SectionTitle("ACCOUNT")
             val acc = vm.account
             if (acc == null) Text("No account details from this portal", color = Palette.muted, fontSize = 14.sp)

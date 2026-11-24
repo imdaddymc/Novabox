@@ -349,7 +349,7 @@ class PlayerActivity : ComponentActivity() {
             if (menu) {
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = RowGap) {
-                    NovaButton(if (isFav) "Unfavourite" else "Favourite", onFav, Modifier.focusRequester(first), icon = Icons.Filled.Star, tint = if (isFav) Palette.gold else null)
+                    NovaButton(if (isFav) "Remove favourite" else "Favourite", onFav, Modifier.focusRequester(first), icon = Icons.Filled.Star, tint = if (isFav) Palette.gold else null)
                     NovaButton("Channel list", onList, icon = Icons.AutoMirrored.Filled.List)
                     NovaButton("Previous", onPrev, icon = Icons.Filled.KeyboardArrowDown)
                     NovaButton("Next", onNext, icon = Icons.Filled.KeyboardArrowUp)

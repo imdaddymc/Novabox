@@ -11,6 +11,9 @@ object AppGraph {
     lateinit var settings: SettingsStore
         private set
 
+    lateinit var appContext: Context
+        private set
+
     var client: StalkerClient? = null
 
     /** Channels loaded for the current profile, used for zapping in the player. */
@@ -22,6 +25,7 @@ object AppGraph {
     fun init(context: Context) {
         if (initialised) return
         val app = context.applicationContext
+        appContext = app
         profiles = ProfileStore(app)
         favorites = FavoritesStore(app)
         settings = SettingsStore(app)

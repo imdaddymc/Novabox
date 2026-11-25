@@ -16,6 +16,7 @@ the red, green, yellow or blue buttons.
 - Favourites for channels, films and series, saved on the device for each profile
 - Search across channels, films and series
 - Account info from the portal (expiry date, plan)
+- Network check (Settings → Run network check, or from the "Couldn't connect" screen): tests the TV's connection, internet access and speed, the portal's address, server and login, and a live stream, then says what to fix
 - Media3/ExoPlayer playback (HLS, MPEG-TS, MP4), with the portal's MAG headers sent to stream servers
 
 ## Controls

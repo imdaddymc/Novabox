@@ -73,6 +73,7 @@ private fun AppRoot(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () 
             is Route.Details -> DetailsScreen(vm, r.item, onPlay)
             is Route.EditProfile -> ProfileEditScreen(vm, r.profile, r.firstRun)
             is Route.Error -> ErrorScreen(vm, r.message)
+            Route.NetworkCheck -> NetworkCheckScreen(vm)
         }
     }
 }
@@ -105,6 +106,7 @@ private fun ErrorScreen(vm: AppViewModel, message: String) {
         Row(horizontalArrangement = RowGap) {
             NovaButton("Try again", { vm.activeProfile?.let(vm::connect) }, Modifier.focusRequester(fr), primary = true)
             NovaButton("Edit profile", { vm.push(Route.EditProfile(vm.activeProfile)) })
+            NovaButton("Check network", { vm.push(Route.NetworkCheck) })
             NovaButton("Other profiles", {
                 vm.backStack.clear(); vm.push(Route.Home); vm.tab = HomeTab.SETTINGS
             })

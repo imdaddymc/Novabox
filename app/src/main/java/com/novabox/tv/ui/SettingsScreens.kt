@@ -86,6 +86,9 @@ fun SettingsScreen(vm: AppViewModel) {
                 }
             }
             Spacer(Modifier.height(20.dp))
+            SectionTitle("NETWORK")
+            NovaButton("Run network check", { vm.push(Route.NetworkCheck) }, icon = Icons.Filled.Refresh)
+            Spacer(Modifier.height(20.dp))
             SectionTitle("DEVICE")
             vm.client?.let {
                 Text("Serial: ${it.serial}", fontSize = 13.sp, color = Palette.muted)
@@ -94,7 +97,7 @@ fun SettingsScreen(vm: AppViewModel) {
             Spacer(Modifier.height(20.dp))
             SectionTitle("CONTROLS")
             Text(
-                "Everything works with the D-pad, OK and Back. In the player: OK shows the menu, Up/Down change channel, Left opens the channel list.",
+                "D-pad, OK and Back do everything. Player: OK menu, ▲▼ channel, ◀ list.",
                 fontSize = 13.sp, color = Palette.muted,
             )
             Spacer(Modifier.height(20.dp))

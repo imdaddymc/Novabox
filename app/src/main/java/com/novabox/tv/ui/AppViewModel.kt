@@ -29,6 +29,7 @@ sealed interface Route {
     data class Details(val item: VodItem) : Route
     data class EditProfile(val profile: Profile?, val firstRun: Boolean = false) : Route
     data class Error(val message: String) : Route
+    data object NetworkCheck : Route
 }
 
 enum class HomeTab(val label: String) { LIVE("Live TV"), MOVIES("Movies"), SERIES("Series"), FAVORITES("Favourites"), SEARCH("Search"), SETTINGS("Settings") }
@@ -246,4 +247,28 @@ class AppViewModel : ViewModel() {
     }
 
     fun showToast(msg: String) { toast = msg }
+
+    // ------------------------------------------------------------- network check
+
+    val netChecks = mutableStateListOf<com.novabox.tv.data.CheckResult>()
+    var netRunning by mutableStateOf(false)
+        private set
+    private var netJob: Job? = null
+
+    fun runNetworkCheck() {
+        if (netRunning) return
+        val diag = com.novabox.tv.data.NetworkDiagnostics(AppGraph.appContext)
+        netChecks.clear()
+        netChecks.addAll(diag.titles.map { com.novabox.tv.data.CheckResult(it) })
+        netRunning = true
+        netJob = viewModelScope.launch {
+            try {
+                diag.run(activeProfile ?: AppGraph.profiles.active, channels.firstOrNull()) { i, r ->
+                    viewModelScope.launch { if (i < netChecks.size) netChecks[i] = r }
+                }
+            } finally {
+                netRunning = false
+            }
+        }
+    }
 }

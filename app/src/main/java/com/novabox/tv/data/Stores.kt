@@ -92,6 +92,13 @@ class SettingsStore(context: Context) {
     var freeTvCountry: String
         get() = prefs.getString("freeTvCountry", null) ?: FreeTv.defaultCountry()
         set(v) { prefs.edit().putString("freeTvCountry", v).apply() }
+    /** Settings → App updates: check daily, download in the background, install at the next start-up. */
+    var autoUpdate: Boolean
+        get() = prefs.getBoolean("autoUpdate", false)
+        set(v) { prefs.edit().putBoolean("autoUpdate", v).apply() }
+    var lastUpdateCheck: Long
+        get() = prefs.getLong("lastUpdateCheck", 0)
+        set(v) { prefs.edit().putLong("lastUpdateCheck", v).apply() }
     /** Settings → Developer tools: shows the Debrid tab. */
     var devTools: Boolean
         get() = prefs.getBoolean("devTools", false)

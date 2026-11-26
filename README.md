@@ -21,10 +21,14 @@ the red, green, yellow or blue buttons.
   community list at iptv-org). No portal, profile or login needed; works even with no profiles set up
 - **Check for updates** (Settings → App updates): downloads the newest NovaBox from this repository and
   installs it over the current one. Profiles, favourites and settings are kept
+- **Automatic updates** (Settings → App updates → Automatic updates: On): checks once a day, downloads new
+  versions in the background and installs them when the TV next starts up. If Android needs a confirm press
+  (the first self-update after installing with Downloader), NovaBox asks the next time you open it
 - **Developer tools** (Settings → Developer tools → Unlock): adds a **Debrid** tab (wrench icon) for your own
   Real-Debrid account. Link it with a code shown on the TV (no password typed), then browse and search your RD
-  torrents and downloads and play them in the film player. It only shows what is already in your account; it
-  doesn't search torrent sites
+  torrents and downloads as poster cards (posters from IMDb's public search, no key needed) and play them in the
+  film player. Seasons and episodes of the same show share one card. It only shows what is already in your
+  account; it doesn't search torrent sites
 - Stream resolution (720p, 1080p, 4K…) shown briefly in the top-right corner when a new stream starts
 - Media3/ExoPlayer playback (HLS, MPEG-TS, MP4), with the portal's MAG headers sent to stream servers
 
@@ -37,7 +41,9 @@ the red, green, yellow or blue buttons.
 | ![Settings](docs/screenshots/05-settings-updates.png) Settings with App updates | ![Update available](docs/screenshots/06-update-available.png) An update is available |
 | ![Android confirm](docs/screenshots/07-update-confirm.png) Android's update prompt | ![Error screen](docs/screenshots/08-error-free-tv-button.png) Connection error, with a Free TV shortcut |
 | ![Developer tools](docs/screenshots/09-developer-tools.png) Settings → Developer tools | ![Link code](docs/screenshots/10-debrid-link-code.png) Linking Real-Debrid with a code |
-| ![Debrid library](docs/screenshots/11-debrid-library.png) Your RD torrents and episode files | ![Debrid search](docs/screenshots/12-debrid-search.png) Searching your RD library |
+| ![Debrid posters](docs/screenshots/13-debrid-posters.png) Your RD torrents as poster cards | ![Show with seasons](docs/screenshots/14-debrid-show-seasons.png) One card per show, with a chip per season |
+| ![Download episodes](docs/screenshots/15-debrid-download-episodes.png) Downloads: a show's episodes on one card | ![Automatic updates](docs/screenshots/16-automatic-updates.png) Settings → Automatic updates |
+| ![Update ready](docs/screenshots/17-update-ready.png) When Android needs a press, NovaBox asks on open | |
 
 ## Controls
 
@@ -110,6 +116,7 @@ echo "sdk.dir=/path/to/Android/Sdk" > local.properties
 - `data/FreeTv.kt`: Free TV country lists
 - `data/Updater.kt`: in-app updates from `release/version.json`
 - `data/RealDebrid.kt`: Real-Debrid device-code login, library and link unrestricting
+- `data/Posters.kt`: release-name parsing, IMDb poster lookup and show grouping for the Debrid tab
 - `ui/`: Compose for TV screens (tab bar, live TV, films/series, details, favourites, search, settings, profile editor)
 - `player/PlayerActivity.kt`: Media3 player with the live TV overlay and channel list
 

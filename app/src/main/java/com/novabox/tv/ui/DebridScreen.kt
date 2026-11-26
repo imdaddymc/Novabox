@@ -1,6 +1,9 @@
 package com.novabox.tv.ui
 
 import androidx.compose.foundation.background
+import com.novabox.tv.data.ShelfGroups
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +19,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
@@ -102,7 +112,6 @@ private fun DebridLink(vm: AppViewModel) {
 private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
     LaunchedEffect(Unit) { vm.loadDebrid() }
     var editing by remember { mutableStateOf(false) }
-    var focusedDownload by remember { mutableStateOf<RealDebrid.Download?>(null) }
     var confirmUnlink by remember { mutableStateOf(false) }
     if (editing) TextInputDialog("Search your Real-Debrid library", vm.debridQuery, onValue = { vm.debridQuery = it }, onDismiss = { editing = false })
     if (confirmUnlink) ConfirmDialog("Unlink Real-Debrid from this TV?", onYes = { vm.unlinkDebrid(); confirmUnlink = false }, onNo = { confirmUnlink = false }, yesLabel = "Unlink")
@@ -112,12 +121,16 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
     val downloads = remember(vm.debridDownloads, q) {
         vm.debridDownloads.filter { RealDebrid.isVideo(it.name) && RealDebrid.matches(it.name, q) }
     }
-    val listState = rememberLazyListState()
-    LaunchedEffect(vm.debridShelf, q) { listState.scrollToItem(0) }
+    val torrentCards = remember(torrents) { ShelfGroups.group(torrents, { "t" + it.id }, { it.name }) }
+    val downloadCards = remember(downloads) { ShelfGroups.group(downloads, { "d" + it.id }, { it.name }) }
+    /** The card whose details are in the side panel. */
+    var openKey by remember { mutableStateOf<String?>(null) }
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(vm.debridShelf, q) { gridState.scrollToItem(0) }
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         // Left: account, search, shelves
-        Column(Modifier.width(250.dp).fillMaxHeight()) {
+        Column(Modifier.width(196.dp).fillMaxHeight()) {
             SectionTitle("REAL-DEBRID")
             val u = vm.debridUser
             Text(u?.username ?: "…", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -142,7 +155,7 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
             SectionTitle("LIBRARY")
             Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
                 AppViewModel.DebridShelf.entries.forEach { shelf ->
-                    val n = if (shelf == AppViewModel.DebridShelf.TORRENTS) torrents.size else downloads.size
+                    val n = if (shelf == AppViewModel.DebridShelf.TORRENTS) torrentCards.size else downloadCards.size
                     FocusSurface(
                         onClick = { vm.debridShelf = shelf }, onFocus = { vm.debridShelf = shelf },
                         selected = vm.debridShelf == shelf, focusedScale = 1.03f, modifier = Modifier.fillMaxWidth(),
@@ -162,10 +175,10 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
             NovaButton("Unlink", { confirmUnlink = true }, icon = Icons.Filled.Close)
         }
 
-        // Middle: the list
+        // Middle: poster cards, one per film and one per show
         Column(Modifier.weight(1f).fillMaxHeight()) {
             val isTorrents = vm.debridShelf == AppViewModel.DebridShelf.TORRENTS
-            val count = if (isTorrents) torrents.size else downloads.size
+            val count = if (isTorrents) torrentCards.size else downloadCards.size
             when {
                 vm.debridLoading && vm.debridUser == null -> CenterMessage("Loading your Real-Debrid library…")
                 vm.debridError != null -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -179,45 +192,60 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                 )
                 else -> {
                     SectionTitle("${vm.debridShelf.label.uppercase()} · $count" + if (q.isNotBlank()) " · “$q”" else "")
-                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)) {
-                        if (isTorrents) items(torrents, key = { "t" + it.id }) { t ->
-                            LibraryRow(
-                                title = RealDebrid.pretty(t.name),
-                                detail = RealDebrid.size(t.bytes) + " · " + torrentStatus(t),
-                                selected = vm.debridOpen?.id == t.id,
-                                onClick = { vm.openTorrent(t) },
-                                onFocus = {},
-                            )
-                        } else items(downloads, key = { "d" + it.id }) { d ->
-                            LibraryRow(
-                                title = RealDebrid.pretty(d.name),
-                                detail = RealDebrid.size(d.bytes) + " · " + d.generated.take(10),
-                                selected = false,
-                                onClick = { vm.playDebrid(RealDebrid.pretty(d.name), d.url, alreadyDirect = true, onPlay) },
-                                onFocus = { focusedDownload = d },
-                            )
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3), state = gridState,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(8.dp),
+                    ) {
+                        if (isTorrents) gridItems(torrentCards, key = { it.key }) { g ->
+                            val first = g.items.first()
+                            val detail = if (g.isShow) seasonsLabel(g.items.map { it.name }) else torrentStatus(first)
+                            DebridCard(vm, first.name, detail, selected = openKey == g.key, onClick = {
+                                openKey = g.key
+                                vm.openTorrent(g.items.firstOrNull { it.status == "downloaded" } ?: first)
+                            }, onFocus = {})
+                        } else gridItems(downloadCards, key = { it.key }) { g ->
+                            val first = g.items.first()
+                            val detail = if (g.isShow) "${g.items.size} episode" + (if (g.items.size == 1) "" else "s") else (episodeTag(first.name) ?: RealDebrid.size(first.bytes))
+                            DebridCard(vm, first.name, detail, selected = openKey == g.key, onClick = {
+                                openKey = g.key
+                                if (!g.isShow) vm.playDebrid(RealDebrid.pretty(first.name), first.url, alreadyDirect = true, onPlay)
+                            }, onFocus = { if (!g.isShow || openKey == null) openKey = g.key })
                         }
                     }
                 }
             }
         }
 
-        // Right: files of the open torrent, or the focused download
-        Column(Modifier.width(340.dp).fillMaxHeight().padding(top = 26.dp)) {
-            Column(Modifier.fillMaxWidth().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(22.dp)) {
+        // Right: seasons and files of the open torrent card, or the episodes / film of a download card
+        Column(Modifier.width(290.dp).fillMaxHeight().padding(top = 26.dp)) {
+            Column(Modifier.fillMaxWidth().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(20.dp)) {
                 vm.debridPlayStatus?.let {
                     Text(it, fontSize = 14.sp, color = if (it.startsWith("Getting")) Palette.accent else Palette.danger)
                     Spacer(Modifier.height(12.dp))
                 }
                 if (vm.debridShelf == AppViewModel.DebridShelf.TORRENTS) {
-                    val t = vm.debridOpen
-                    if (t == null) {
+                    val g = torrentCards.firstOrNull { it.key == openKey }
+                    val t = vm.debridOpen?.takeIf { open -> g?.items?.any { it.id == open.id } == true }
+                    if (g == null || t == null) {
                         SectionTitle("FILES")
-                        Text("Press OK on a torrent to see its video files.", fontSize = 14.sp, color = Palette.muted)
+                        Text("Press OK on a poster to see its video files.", fontSize = 14.sp, color = Palette.muted)
                     } else {
-                        Text(RealDebrid.pretty(t.name), fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        DetailHeader(vm, t.name)
+                        Spacer(Modifier.height(10.dp))
+                        if (g.isShow && g.items.size > 1) {
+                            // One chip per season torrent of this show
+                            Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                g.items.forEach { st ->
+                                    FocusSurface(onClick = { vm.openTorrent(st) }, selected = st.id == t.id, shape = RoundedCornerShape(50), focusedScale = 1.06f) { _ ->
+                                        Text(seasonChip(st), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                        }
                         Text(RealDebrid.size(t.bytes) + " · " + torrentStatus(t), fontSize = 13.sp, color = Palette.muted)
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(10.dp))
                         val files = vm.debridFiles
                         when {
                             t.status != "downloaded" -> Text("This torrent isn't ready on Real-Debrid yet, so it can't play.", fontSize = 14.sp, color = Palette.muted)
@@ -227,33 +255,120 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                                 SectionTitle("VIDEO FILES · ${files.size}")
                                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(4.dp)) {
                                     items(files, key = { it.link }) { f ->
-                                        FocusSurface(onClick = { vm.playDebrid(RealDebrid.pretty(f.name), f.link, alreadyDirect = false, onPlay) }, focusedScale = 1.02f, modifier = Modifier.fillMaxWidth()) { foc ->
-                                            Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
-                                                Spacer(Modifier.width(10.dp))
-                                                Column(Modifier.weight(1f)) {
-                                                    Text(RealDebrid.pretty(f.name), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                                    Text(RealDebrid.size(f.bytes), fontSize = 12.sp, color = if (foc) Color(0xFF39425A) else Palette.muted)
-                                                }
-                                            }
-                                        }
+                                        PlayRow(episodeTag(f.name) ?: RealDebrid.pretty(f.name), RealDebrid.size(f.bytes)) { vm.playDebrid(RealDebrid.pretty(f.name), f.link, alreadyDirect = false, onPlay) }
                                     }
                                 }
                             }
                         }
                     }
                 } else {
-                    val d = focusedDownload ?: downloads.firstOrNull()
-                    if (d != null) {
-                        Text(RealDebrid.pretty(d.name), fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        Text(RealDebrid.size(d.bytes) + " · added " + d.generated.take(10), fontSize = 13.sp, color = Palette.muted)
+                    val g = downloadCards.firstOrNull { it.key == openKey } ?: downloadCards.firstOrNull()
+                    if (g == null) {
+                        Text("Links you have unrestricted on Real-Debrid show here.", fontSize = 14.sp, color = Palette.muted)
+                    } else if (g.isShow) {
+                        DetailHeader(vm, g.items.first().name)
+                        Spacer(Modifier.height(12.dp))
+                        SectionTitle("EPISODES · ${g.items.size}")
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(4.dp)) {
+                            items(g.items, key = { it.id }) { d ->
+                                PlayRow(episodeTag(d.name) ?: RealDebrid.pretty(d.name), RealDebrid.size(d.bytes) + " · added " + d.generated.take(10)) {
+                                    vm.playDebrid(RealDebrid.pretty(d.name), d.url, alreadyDirect = true, onPlay)
+                                }
+                            }
+                        }
+                    } else {
+                        val d = g.items.first()
+                        DetailHeader(vm, d.name)
+                        Text(RealDebrid.size(d.bytes) + " · added " + d.generated.take(10), fontSize = 13.sp, color = Palette.muted, modifier = Modifier.padding(top = 8.dp))
                         Spacer(Modifier.height(16.dp))
                         NovaButton("Play", { vm.playDebrid(RealDebrid.pretty(d.name), d.url, alreadyDirect = true, onPlay) }, icon = Icons.Filled.PlayArrow, primary = true)
-                    } else {
-                        Text("Links you have unrestricted on Real-Debrid show here.", fontSize = 14.sp, color = Palette.muted)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PlayRow(title: String, detail: String, onClick: () -> Unit) {
+    FocusSurface(onClick = onClick, focusedScale = 1.02f, modifier = Modifier.fillMaxWidth()) { foc ->
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(detail, fontSize = 12.sp, color = if (foc) Color(0xFF39425A) else Palette.muted, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** "Season 1" or "Seasons 1–3" for a show card's torrents. */
+private fun seasonsLabel(names: List<String>): String {
+    val seasons = names.mapNotNull { com.novabox.tv.data.ReleaseNames.parse(it).season }.distinct().sorted()
+    return when {
+        seasons.isEmpty() -> "Series"
+        seasons.size == 1 -> "Season ${seasons[0]}"
+        seasons.last() - seasons.first() + 1 == seasons.size -> "Seasons ${seasons.first()}–${seasons.last()}"
+        else -> "${seasons.size} seasons"
+    }
+}
+
+private fun seasonChip(t: RealDebrid.Torrent): String {
+    val r = com.novabox.tv.data.ReleaseNames.parse(t.name)
+    val base = r.season?.let { s -> "Season $s" + (r.episode?.let { " Ep $it" } ?: "") } ?: RealDebrid.pretty(t.name)
+    return if (t.status == "downloaded") base else "$base (not ready)"
+}
+
+/** "S01E03" for an episode file, else null. */
+private fun episodeTag(name: String): String? {
+    val r = com.novabox.tv.data.ReleaseNames.parse(name)
+    return r.season?.let { s -> "S%02d".format(s) + (r.episode?.let { "E%02d".format(it) } ?: "") }
+}
+
+/** A poster card for a torrent or download: matched poster and title, with the release's detail underneath. */
+@Composable
+private fun DebridCard(vm: AppViewModel, name: String, detail: String, selected: Boolean, onClick: () -> Unit, onFocus: () -> Unit) {
+    LaunchedEffect(name) { vm.wantPoster(name) }
+    val info = vm.debridPosters[name]
+    val title = info?.title ?: com.novabox.tv.data.ReleaseNames.parse(name).title.ifBlank { RealDebrid.pretty(name) }
+    val sub = listOfNotNull(info?.year?.takeIf { it.isNotBlank() }, detail.takeIf { it.isNotBlank() }).joinToString(" · ")
+    FocusSurface(onClick = onClick, onFocus = onFocus, selected = selected, focusedScale = 1.06f, modifier = Modifier.fillMaxWidth()) { focused ->
+        Column {
+            Box(Modifier.fillMaxWidth().aspectPoster().background(Color(0xFF1C2540)), contentAlignment = Alignment.Center) {
+                Text(title.take(1).uppercase(), fontSize = 34.sp, color = Palette.muted, fontWeight = FontWeight.Bold)
+                if (!info?.poster.isNullOrBlank()) coil.compose.AsyncImage(
+                    model = info!!.poster, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                )
+            }
+            // Room for two lines of title so names aren't cut short
+            Column(Modifier.fillMaxWidth().height(62.dp).padding(horizontal = 8.dp, vertical = 6.dp)) {
+                Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 15.sp)
+                Text(sub, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp, color = if (focused) Color(0xFF39425A) else Palette.muted)
+            }
+        }
+    }
+}
+
+/** Poster, matched title and year at the top of the side panel, with the full release name under it. */
+@Composable
+private fun DetailHeader(vm: AppViewModel, name: String) {
+    LaunchedEffect(name) { vm.wantPoster(name) }
+    val info = vm.debridPosters[name]
+    Row {
+        Box(Modifier.width(84.dp).aspectPoster().clip(RoundedCornerShape(8.dp)).background(Color(0xFF222C45)), contentAlignment = Alignment.Center) {
+            Text((info?.title ?: RealDebrid.pretty(name)).take(1).uppercase(), fontSize = 28.sp, color = Palette.muted, fontWeight = FontWeight.Bold)
+            if (!info?.poster.isNullOrBlank()) coil.compose.AsyncImage(
+                model = info!!.poster, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column {
+            Text(info?.title ?: RealDebrid.pretty(name), fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (info != null) Text(listOf(info.year, if (info.series) "Series" else "Film").filter { it.isNotBlank() }.joinToString(" · "), fontSize = 13.sp, color = Palette.muted)
+            if (!info?.cast.isNullOrBlank()) Text(info!!.cast, fontSize = 12.sp, color = Palette.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(4.dp))
+            Text(RealDebrid.pretty(name), fontSize = 11.sp, color = Palette.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -269,12 +384,3 @@ private fun torrentStatus(t: RealDebrid.Torrent): String = when (t.status) {
     else -> t.status.replace('_', ' ')
 }
 
-@Composable
-private fun LibraryRow(title: String, detail: String, selected: Boolean, onClick: () -> Unit, onFocus: () -> Unit) {
-    FocusSurface(onClick = onClick, onFocus = onFocus, selected = selected, focusedScale = 1.02f, modifier = Modifier.fillMaxWidth()) { f ->
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text(detail, maxLines = 1, fontSize = 12.sp, color = if (f) Color(0xFF39425A) else Palette.muted)
-        }
-    }
-}

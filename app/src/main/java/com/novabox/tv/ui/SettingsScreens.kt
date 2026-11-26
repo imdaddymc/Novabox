@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
@@ -173,6 +174,38 @@ private fun UpdatesSection(vm: AppViewModel) {
     }
     val ready = s is AppViewModel.UpdateState.Available || s is AppViewModel.UpdateState.NeedsPermission
     NovaButton(label, action, icon = if (ready) Icons.Filled.Check else Icons.Filled.Refresh, primary = ready)
+    Spacer(Modifier.height(10.dp))
+    // One button whose label flips, so focus stays on it.
+    NovaButton(
+        if (vm.autoUpdate) "Automatic updates: On" else "Automatic updates: Off",
+        { vm.setAutoUpdates(!vm.autoUpdate) },
+        icon = if (vm.autoUpdate) Icons.Filled.Check else Icons.Filled.Close,
+    )
+    Text(
+        if (vm.autoUpdate) "Checks once a day and downloads new versions. They install when the TV next starts up."
+        else "Turn on to check once a day and install new versions when the TV starts up.",
+        fontSize = 12.sp, color = Palette.muted, modifier = Modifier.padding(top = 6.dp),
+    )
+}
+
+/** Shown when NovaBox opens and the daily check has an update downloaded and waiting. */
+@Composable
+fun UpdateReadyDialog(vm: AppViewModel) {
+    val version = vm.readyToInstall ?: return
+    val fr = remember { FocusRequester() }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(100); runCatching { fr.requestFocus() } }
+    androidx.compose.ui.window.Dialog(onDismissRequest = { vm.postponeReadyUpdate() }) {
+        Column(Modifier.width(520.dp).background(Palette.bg2, RoundedCornerShape(18.dp)).padding(28.dp)) {
+            Text("NovaBox $version is ready", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text("It downloaded automatically. Install it now? NovaBox closes to update; your profiles and favourites are kept.", fontSize = 14.sp, color = Palette.muted)
+            Spacer(Modifier.height(20.dp))
+            Row(horizontalArrangement = RowGap) {
+                NovaButton("Install now", { vm.installReadyUpdate() }, Modifier.focusRequester(fr), icon = Icons.Filled.Check, primary = true)
+                NovaButton("Later", { vm.postponeReadyUpdate() })
+            }
+        }
+    }
 }
 
 @Composable

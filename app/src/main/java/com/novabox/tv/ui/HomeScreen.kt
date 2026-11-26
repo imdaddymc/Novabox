@@ -141,6 +141,7 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
             }
             Clock()
         }
+        UpdateReadyDialog(vm)
         Box(Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, bottom = 24.dp)) {
             val needsPortal = vm.tab in setOf(HomeTab.LIVE, HomeTab.MOVIES, HomeTab.SERIES)
             if (needsPortal && vm.client == null) {

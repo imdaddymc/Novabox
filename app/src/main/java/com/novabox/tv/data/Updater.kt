@@ -65,7 +65,8 @@ object Updater {
 
     /** Downloads the APK into the app's cache, reporting progress from 0 to 1 (or -1 if unknown). */
     suspend fun download(context: Context, info: UpdateInfo, progress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
-        val dir = File(context.cacheDir, "updates").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+        // Kept in app storage (not cache) so a downloaded update survives until it is installed.
+        val dir = updatesDir(context).apply { mkdirs(); listFiles()?.forEach { it.delete() } }
         val out = File(dir, "NovaBox-${info.versionCode}.apk")
         val req = Request.Builder().url(info.apkUrl + (if ('?' in info.apkUrl) "&" else "?") + "v=${info.versionCode}").build()
         http.newCall(req).execute().use { r ->
@@ -102,6 +103,34 @@ object Updater {
         out
     }
 
+    private fun updatesDir(context: Context) = File(context.filesDir, "updates")
+
+    /** A downloaded update that is newer than this version, with its version name; stale files are removed. */
+    fun readyUpdate(context: Context): Pair<File, String>? {
+        val files = updatesDir(context).listFiles()?.filter { it.name.endsWith(".apk") }.orEmpty()
+        for (f in files) {
+            @Suppress("DEPRECATION")
+            val pkg = context.packageManager.getPackageArchiveInfo(f.path, 0)
+            @Suppress("DEPRECATION")
+            val code = pkg?.let { if (Build.VERSION.SDK_INT >= 28) it.longVersionCode.toInt() else it.versionCode } ?: -1
+            if (pkg?.packageName == context.packageName && code > BuildConfig.VERSION_CODE) return f to (pkg.versionName ?: "")
+            f.delete()
+        }
+        return null
+    }
+
+    /**
+     * The daily automatic check: at most once every 23 hours, and only when turned on in Settings.
+     * A newer version is downloaded quietly and installed at the next start-up (see [UpdateBootReceiver]).
+     */
+    suspend fun autoCheck(context: Context) {
+        val settings = AppGraph.settings
+        if (!settings.autoUpdate || System.currentTimeMillis() - settings.lastUpdateCheck < 23 * 3600_000L) return
+        val info = check()
+        if (info != null && readyUpdate(context)?.first?.name != "NovaBox-${info.versionCode}.apk") download(context, info) {}
+        settings.lastUpdateCheck = System.currentTimeMillis()
+    }
+
     /** Android 8+ asks once per app before it may install other apps. */
     fun canInstall(context: Context): Boolean =
         Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
@@ -117,11 +146,16 @@ object Updater {
     }
 
     /** Hands the APK to Android's installer. Android shows its own "Update this app?" prompt. */
-    fun install(context: Context, apk: File) {
+    /**
+     * [quiet]: ask Android to update without the confirm screen. Android 12+ allows that once NovaBox
+     * itself installed the current version; otherwise Android still asks.
+     */
+    fun install(context: Context, apk: File, quiet: Boolean = false) {
         installError.value = null
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
+            if (quiet && Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
         val id = installer.createSession(params)
         installer.openSession(id).use { session ->
@@ -161,5 +195,16 @@ class UpdateInstallReceiver : BroadcastReceiver() {
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             }
         }
+    }
+}
+
+/** At TV start-up, installs an update that the daily check already downloaded. */
+class UpdateBootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        AppGraph.init(context)
+        if (!AppGraph.settings.autoUpdate) return
+        val ready = Updater.readyUpdate(context) ?: return
+        runCatching { Updater.install(context, ready.first, quiet = true) }
     }
 }

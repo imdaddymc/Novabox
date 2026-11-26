@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2.0",
-  "notes": "Developer tools in Settings: unlock a Debrid tab to play from your Real-Debrid account.",
+  "versionCode": 4,
+  "versionName": "1.3.0",
+  "notes": "Poster cards and show grouping in the Debrid tab. Settings > App updates can now check daily and install on the next start-up.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

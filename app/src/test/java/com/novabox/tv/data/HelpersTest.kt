@@ -74,4 +74,39 @@ class HelpersTest {
         assertEquals("The Long Road 2024 1080p WEB-DL", com.novabox.tv.data.RealDebrid.pretty("The.Long.Road.2024.1080p.WEB-DL.mkv"))
         assertEquals("Harbour Lights S01 1080p WEB", com.novabox.tv.data.RealDebrid.pretty("Harbour.Lights.S01.1080p.WEB"))
     }
+
+    @Test fun releaseNamesGiveTitleYearAndSeason() {
+        val p = com.novabox.tv.data.ReleaseNames::parse
+        assertEquals(com.novabox.tv.data.ReleaseName("The Long Road", 2024, null, null), p("The.Long.Road.2024.1080p.WEB-DL.mkv"))
+        assertEquals(com.novabox.tv.data.ReleaseName("Harbour Lights", null, 1, null), p("Harbour.Lights.S01.1080p.WEB"))
+        assertEquals(com.novabox.tv.data.ReleaseName("Harbour Lights", null, 1, 3), p("Harbour.Lights.S01E03.1080p.WEB.mkv"))
+        assertEquals(com.novabox.tv.data.ReleaseName("Quiet Valley", 2022, null, null), p("Quiet Valley (2022) [720p] BluRay.mp4"))
+        assertEquals(com.novabox.tv.data.ReleaseName("2012", 2009, null, null), p("2012.2009.1080p.BluRay.x264.mkv"))
+        assertEquals(com.novabox.tv.data.ReleaseName("Paper Kites", null, 2, null), p("Paper_Kites_Season_2_Complete"))
+    }
+
+    @Test fun postersPickTheRightKindAndYear() {
+        val o = org.json.JSONObject("""
+            {"d":[
+              {"i":{"imageUrl":"https://m.media-amazon.com/images/M/AAA._V1_.jpg"},"id":"tt1","l":"The Long Road","q":"TV series","qid":"tvSeries","y":2010},
+              {"i":{"imageUrl":"https://m.media-amazon.com/images/M/BBB._V1_.jpg"},"id":"tt2","l":"The Long Road","q":"feature","qid":"movie","y":2016},
+              {"i":{"imageUrl":"https://m.media-amazon.com/images/M/CCC._V1_.jpg"},"id":"tt3","l":"The Long Road","q":"feature","qid":"movie","y":2024,"s":"A. Actor, B. Actor"},
+              {"id":"/name/nm1","l":"Someone"}]}
+        """)
+        val film = com.novabox.tv.data.Posters.best(o, com.novabox.tv.data.ReleaseName("The Long Road", 2024, null, null))!!
+        assertEquals("2024", film.year)
+        assertEquals("https://m.media-amazon.com/images/M/CCC._V1_UX300_.jpg", film.poster)
+        val show = com.novabox.tv.data.Posters.best(o, com.novabox.tv.data.ReleaseName("The Long Road", null, 1, null))!!
+        assertTrue(show.series)
+        assertEquals("2010", show.year)
+    }
+
+    @Test fun seasonsOfOneShowShareACard() {
+        val names = listOf("Harbour.Lights.S02.1080p.WEB", "The.Long.Road.2024.1080p.mkv", "harbour lights S01 720p", "Paper.Kites.S01E02.mkv", "Paper.Kites.S01E01.mkv")
+        val groups = com.novabox.tv.data.ShelfGroups.group(names, { it }, { it })
+        assertEquals(3, groups.size)
+        assertEquals(listOf("harbour lights S01 720p", "Harbour.Lights.S02.1080p.WEB"), groups[0].items)
+        assertEquals(false, groups[1].isShow)
+        assertEquals(listOf("Paper.Kites.S01E01.mkv", "Paper.Kites.S01E02.mkv"), groups[2].items)
+    }
 }

@@ -88,6 +88,7 @@ class AppViewModel : ViewModel() {
     val client: StalkerClient? get() = AppGraph.client
 
     fun start() {
+        startAutoUpdates()
         if (backStack.isNotEmpty()) return
         val p = AppGraph.profiles.active
         when {
@@ -362,6 +363,23 @@ class AppViewModel : ViewModel() {
         private set
     var debridFiles by mutableStateOf<List<com.novabox.tv.data.RealDebrid.RdFile>?>(null)
         private set
+    /** Matched title and poster per release name (null value: looked up, no match). */
+    val debridPosters = mutableStateMapOf<String, com.novabox.tv.data.TitleInfo?>()
+    private val posterAsked = HashSet<String>()
+
+    fun wantPoster(name: String) {
+        if (!posterAsked.add(name)) return
+        viewModelScope.launch {
+            try {
+                debridPosters[name] = com.novabox.tv.data.Posters.lookup(com.novabox.tv.data.ReleaseNames.parse(name))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                posterAsked.remove(name) // offline: try again next time the card shows
+            }
+        }
+    }
+
     /** Shown while a link is being turned into a stream, or why that failed. */
     var debridPlayStatus by mutableStateOf<String?>(null)
     private var debridJob: Job? = null
@@ -407,7 +425,7 @@ class AppViewModel : ViewModel() {
         com.novabox.tv.data.RealDebrid.unlink()
         debridLinked = false
         debridUser = null; debridTorrents = emptyList(); debridDownloads = emptyList()
-        debridOpen = null; debridFiles = null; debridError = null
+        debridOpen = null; debridFiles = null; debridError = null; debridQuery = ""; debridPlayStatus = null
     }
 
     fun loadDebrid(force: Boolean = false) {
@@ -420,6 +438,11 @@ class AppViewModel : ViewModel() {
             try {
                 debridUser = com.novabox.tv.data.RealDebrid.user()
                 debridTorrents = com.novabox.tv.data.RealDebrid.torrents()
+                debridOpen?.let { open ->
+                    val fresh = debridTorrents.firstOrNull { it.id == open.id }
+                    debridOpen = null; debridFiles = null
+                    if (fresh != null) openTorrent(fresh)
+                }
                 debridDownloads = com.novabox.tv.data.RealDebrid.downloads()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -436,6 +459,7 @@ class AppViewModel : ViewModel() {
         filesJob?.cancel()
         debridOpen = t
         debridFiles = null
+        debridPlayStatus = null
         if (t.status != "downloaded") { debridFiles = emptyList(); return }
         filesJob = viewModelScope.launch {
             debridFiles = try {
@@ -449,8 +473,11 @@ class AppViewModel : ViewModel() {
     }
 
     /** Unrestricts an RD link (torrent files) and opens the film player. */
+    private var playJob: Job? = null
+
     fun playDebrid(title: String, link: String, alreadyDirect: Boolean, onPlay: (PlayRequest) -> Unit) {
-        viewModelScope.launch {
+        if (playJob?.isActive == true) return
+        playJob = viewModelScope.launch {
             debridPlayStatus = "Getting the stream from Real-Debrid…"
             try {
                 val url = if (alreadyDirect) link else com.novabox.tv.data.RealDebrid.unrestrict(link)
@@ -516,6 +543,55 @@ class AppViewModel : ViewModel() {
             }
         }
     }
+
+    // ------------------------------------------------------------- automatic updates
+
+    var autoUpdate by mutableStateOf(AppGraph.settings.autoUpdate)
+        private set
+    /** Version name of an update downloaded by the daily check and waiting to install; null if none. */
+    var readyToInstall by mutableStateOf<String?>(null)
+        private set
+    private var autoJob: Job? = null
+
+    fun setAutoUpdates(on: Boolean) {
+        autoUpdate = on
+        AppGraph.settings.autoUpdate = on
+        if (on) {
+            AppGraph.settings.lastUpdateCheck = 0 // check straight away
+            // Installing at start-up needs this permission already granted.
+            if (!com.novabox.tv.data.Updater.canInstall(AppGraph.appContext)) com.novabox.tv.data.Updater.openInstallPermission(AppGraph.appContext)
+            autoJob?.cancel(); autoJob = null
+            startAutoUpdates()
+        } else {
+            readyToInstall = null
+        }
+    }
+
+    /** Daily check while NovaBox runs (TVs often leave it open), plus once at every launch. */
+    private fun startAutoUpdates() {
+        if (autoJob?.isActive == true) return
+        val ctx = AppGraph.appContext
+        autoJob = viewModelScope.launch {
+            // An update downloaded earlier that the start-up install didn't finish: offer it now, as NovaBox opens.
+            if (AppGraph.settings.autoUpdate) readyToInstall = com.novabox.tv.data.Updater.readyUpdate(ctx)?.second
+            while (isActive) {
+                if (AppGraph.settings.autoUpdate) runCatching { com.novabox.tv.data.Updater.autoCheck(ctx) }
+                delay(3 * 3600_000L)
+            }
+        }
+    }
+
+    fun installReadyUpdate() {
+        val ctx = AppGraph.appContext
+        val ready = com.novabox.tv.data.Updater.readyUpdate(ctx) ?: run { readyToInstall = null; return }
+        readyToInstall = null
+        if (!com.novabox.tv.data.Updater.canInstall(ctx)) { com.novabox.tv.data.Updater.openInstallPermission(ctx); return }
+        runCatching { com.novabox.tv.data.Updater.install(ctx, ready.first, quiet = true) }
+            .onFailure { update = UpdateState.Failed("Update failed: ${it.message ?: it.javaClass.simpleName}", null) }
+    }
+
+    /** "Later": ask again at the next launch. */
+    fun postponeReadyUpdate() { readyToInstall = null }
 
     /** Called when the installer reports a failure or the user cancels Android's prompt. */
     fun updateInstallFailed(message: String) {

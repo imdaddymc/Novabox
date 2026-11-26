@@ -28,7 +28,7 @@ the red, green, yellow or blue buttons.
 | Search | Choose the **Search** tab, press OK on the search box and type with the on-screen keyboard |
 | Back | Inside a page, jumps back to the tab bar. On the tab bar, exits the app |
 | Live player | ▲ ▼ change channel · ◀ channel list · OK menu (Favourite, Channel list, Previous, Next, Exit) · Back closes the menu or the player |
-| Film player | Standard player controls with the D-pad |
+| Film player | OK shows the controls (back 10s, play/pause, forward 30s, exit) · ◀ ▶ skip back 10s / forward 30s · Back hides the controls, then closes the player |
 
 ## Install on Google TV (sideload)
 

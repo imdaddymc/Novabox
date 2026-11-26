@@ -34,6 +34,11 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.materialIcon
+import androidx.compose.material.icons.materialPath
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +60,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,6 +96,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+
+private val PauseIcon = materialIcon(name = "Pause") {
+    materialPath {
+        moveTo(6f, 19f); horizontalLineTo(10f); verticalLineTo(5f); horizontalLineTo(6f); close()
+        moveTo(14f, 5f); verticalLineTo(19f); horizontalLineTo(18f); verticalLineTo(5f); close()
+    }
+}
 
 @OptIn(UnstableApi::class)
 class PlayerActivity : ComponentActivity() {
@@ -153,10 +166,10 @@ class PlayerActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun Video(useController: Boolean, modifier: Modifier = Modifier) {
+    private fun Video(useController: Boolean, modifier: Modifier = Modifier, texture: Boolean = false) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                (if (texture) android.view.LayoutInflater.from(ctx).inflate(com.novabox.tv.R.layout.player_texture, null) as PlayerView else PlayerView(ctx)).apply {
                     player = this@PlayerActivity.player
                     this.useController = useController
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
@@ -192,6 +205,13 @@ class PlayerActivity : ComponentActivity() {
     @Composable
     private fun VodPlayer(req: PlayRequest.Vod) {
         var status by remember { mutableStateOf<String?>("Loading…") }
+        var controls by remember { mutableStateOf(true) }
+        var hideAt by remember { mutableLongStateOf(System.currentTimeMillis() + 5000) }
+        var playing by remember { mutableStateOf(true) }
+        var position by remember { mutableLongStateOf(0L) }
+        var duration by remember { mutableLongStateOf(0L) }
+        val rootFocus = remember { FocusRequester() }
+
         LaunchedEffect(req) {
             try {
                 val client = AppGraph.client ?: error("Not connected")
@@ -201,9 +221,55 @@ class PlayerActivity : ComponentActivity() {
                 status = "Couldn't start playback: ${e.message}"
             }
         }
+        LaunchedEffect(Unit) {
+            while (true) {
+                position = player.currentPosition.coerceAtLeast(0)
+                duration = player.duration.takeIf { it > 0 } ?: 0
+                playing = player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING)
+                if (controls && System.currentTimeMillis() > hideAt && player.isPlaying) controls = false
+                delay(500)
+            }
+        }
+        LaunchedEffect(controls) { if (!controls) runCatching { rootFocus.requestFocus() } }
         usePlayerError { status = "Playback error ($it)" }
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
-            Video(useController = true)
+
+        fun poke() { controls = true; hideAt = System.currentTimeMillis() + 5000 }
+        fun seek(deltaMs: Long) {
+            val max = if (duration > 0) duration else Long.MAX_VALUE
+            player.seekTo((player.currentPosition + deltaMs).coerceIn(0, max))
+            position = player.currentPosition
+            poke()
+        }
+        fun toggle() { if (player.isPlaying) player.pause() else player.play(); playing = !playing; poke() }
+
+        BackHandler(enabled = controls) { controls = false }
+
+        Box(
+            Modifier.fillMaxSize().background(Color.Black)
+                .focusRequester(rootFocus)
+                .focusable()
+                .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (e.key) {
+                        Key.MediaPlayPause -> { toggle(); true }
+                        Key.MediaPlay -> { player.play(); poke(); true }
+                        Key.MediaPause -> { player.pause(); poke(); true }
+                        Key.MediaFastForward -> { seek(30_000); true }
+                        Key.MediaRewind -> { seek(-10_000); true }
+                        else -> { if (controls) hideAt = System.currentTimeMillis() + 5000; false }
+                    }
+                }
+                .onKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown || controls) return@onKeyEvent false
+                    when (e.key) {
+                        Key.DirectionLeft -> { seek(-10_000); true }
+                        Key.DirectionRight -> { seek(30_000); true }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.DirectionUp, Key.DirectionDown, Key.Menu -> { poke(); true }
+                        else -> false
+                    }
+                }
+        ) {
+            Video(useController = false, texture = true)
             status?.let {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(req.title, fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -212,7 +278,49 @@ class PlayerActivity : ComponentActivity() {
                     Text(it, color = Palette.muted)
                 }
             }
+            AnimatedVisibility(controls, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter)) {
+                VodControls(req, playing, position, duration,
+                    onBack10 = { seek(-10_000) }, onToggle = { toggle() }, onFwd30 = { seek(30_000) }, onExit = { finish() })
+            }
         }
+    }
+
+    @Composable
+    private fun VodControls(
+        req: PlayRequest.Vod, playing: Boolean, position: Long, duration: Long,
+        onBack10: () -> Unit, onToggle: () -> Unit, onFwd30: () -> Unit, onExit: () -> Unit,
+    ) {
+        val first = remember { FocusRequester() }
+        LaunchedEffect(Unit) { delay(50); runCatching { first.requestFocus() } }
+        Column(
+            Modifier.fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
+                .padding(start = 56.dp, end = 56.dp, top = 80.dp, bottom = 36.dp)
+        ) {
+            Text(req.title, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (req.subtitle.isNotBlank()) Text(req.subtitle, fontSize = 16.sp, color = Palette.muted)
+            Spacer(Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(formatTime(position), fontSize = 14.sp, color = Color.White, modifier = Modifier.width(80.dp))
+                ProgressBar(if (duration > 0) position.toFloat() / duration else 0f, Modifier.weight(1f))
+                Text(if (duration > 0) formatTime(duration) else "--:--", fontSize = 14.sp, color = Palette.muted,
+                    modifier = Modifier.width(80.dp).padding(start = 12.dp))
+            }
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = RowGap, verticalAlignment = Alignment.CenterVertically) {
+                NovaButton("10s", onBack10, icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft)
+                NovaButton(if (playing) "Pause" else "Play", onToggle, Modifier.focusRequester(first),
+                    icon = if (playing) PauseIcon else Icons.Filled.PlayArrow, primary = true)
+                NovaButton("30s", onFwd30, icon = Icons.AutoMirrored.Filled.KeyboardArrowRight)
+                NovaButton("Exit player", onExit, icon = Icons.AutoMirrored.Filled.ArrowBack)
+            }
+        }
+    }
+
+    private fun formatTime(ms: Long): String {
+        val t = ms / 1000
+        val h = t / 3600; val m = (t % 3600) / 60; val s = t % 60
+        return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
     }
 
     // ---------------------------------------------------------------- live

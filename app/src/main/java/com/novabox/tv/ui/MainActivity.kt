@@ -101,7 +101,20 @@ private fun ErrorScreen(vm: AppViewModel, message: String) {
     Column(Modifier.fillMaxSize().padding(80.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
         Text("Couldn't connect", fontSize = 36.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
-        Text(message, color = Palette.muted, fontSize = 16.sp)
+        val m = message.lowercase()
+        val summary = when {
+            "unable to resolve host" in m || "unknownhost" in m -> "The portal address couldn't be found. Check the portal URL in your profile, and that the TV is online."
+            "timeout" in m || "timed out" in m -> "The portal didn't answer in time. It may be busy or down; try again in a few minutes."
+            "failed to connect" in m || "refused" in m -> "The portal refused the connection. Check the address and port in the portal URL."
+            "mac" in m && ("not found" in m || "blocked" in m || "denied" in m) -> "The portal didn't accept this MAC address. Check it with your provider."
+            else -> message.lineSequence().first()
+        }
+        Text(summary, color = Palette.text, fontSize = 20.sp)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Details: " + message.lineSequence().drop(if (summary == message.lineSequence().first()) 1 else 0).joinToString(" ").ifBlank { message },
+            color = Palette.muted, fontSize = 13.sp, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
         Spacer(Modifier.height(32.dp))
         Row(horizontalArrangement = RowGap) {
             NovaButton("Try again", { vm.activeProfile?.let(vm::connect) }, Modifier.focusRequester(fr), primary = true)

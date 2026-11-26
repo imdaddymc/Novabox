@@ -92,6 +92,10 @@ class SettingsStore(context: Context) {
     var freeTvCountry: String
         get() = prefs.getString("freeTvCountry", null) ?: FreeTv.defaultCountry()
         set(v) { prefs.edit().putString("freeTvCountry", v).apply() }
+    /** Settings → Developer tools: shows the Debrid tab. */
+    var devTools: Boolean
+        get() = prefs.getBoolean("devTools", false)
+        set(v) { prefs.edit().putBoolean("devTools", v).apply() }
     var lastChannelId: String?
         get() = prefs.getString("lastChannel", null)
         set(v) { prefs.edit().putString("lastChannel", v).apply() }

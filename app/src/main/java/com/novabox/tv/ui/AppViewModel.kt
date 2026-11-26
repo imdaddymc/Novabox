@@ -12,6 +12,7 @@ import com.novabox.tv.data.AppGraph
 import com.novabox.tv.data.Channel
 import com.novabox.tv.data.EpgEntry
 import com.novabox.tv.data.Genre
+import com.novabox.tv.data.PlayRequest
 import com.novabox.tv.data.Profile
 import com.novabox.tv.data.Season
 import com.novabox.tv.data.StalkerClient
@@ -32,7 +33,7 @@ sealed interface Route {
     data object NetworkCheck : Route
 }
 
-enum class HomeTab(val label: String) { LIVE("Live TV"), FREE_TV("Free TV"), MOVIES("Movies"), SERIES("Series"), FAVORITES("Favourites"), SEARCH("Search"), SETTINGS("Settings") }
+enum class HomeTab(val label: String) { LIVE("Live TV"), FREE_TV("Free TV"), MOVIES("Movies"), SERIES("Series"), FAVORITES("Favourites"), SEARCH("Search"), DEBRID("Debrid"), SETTINGS("Settings") }
 
 /** Paged list of movies or series for one category. */
 class VodList {
@@ -318,6 +319,149 @@ class AppViewModel : ViewModel() {
         backStack.clear()
         backStack.add(Route.Home)
         tab = HomeTab.FREE_TV
+    }
+
+    // ------------------------------------------------------------- developer tools: Real-Debrid
+
+    var devTools by mutableStateOf(AppGraph.settings.devTools)
+        private set
+    val visibleTabs: List<HomeTab> get() = HomeTab.entries.filter { it != HomeTab.DEBRID || devTools }
+
+    fun setDeveloperTools(on: Boolean) {
+        devTools = on
+        AppGraph.settings.devTools = on
+        if (!on && tab == HomeTab.DEBRID) tab = HomeTab.SETTINGS
+    }
+
+    sealed interface DebridLogin {
+        data object Idle : DebridLogin
+        data object Starting : DebridLogin
+        data class Waiting(val code: com.novabox.tv.data.RealDebrid.DeviceCode) : DebridLogin
+        data class Failed(val message: String) : DebridLogin
+    }
+
+    enum class DebridShelf(val label: String) { TORRENTS("Torrents"), DOWNLOADS("Downloads") }
+
+    var debridLinked by mutableStateOf(com.novabox.tv.data.RealDebrid.linked)
+        private set
+    var debridLogin by mutableStateOf<DebridLogin>(DebridLogin.Idle)
+        private set
+    var debridUser by mutableStateOf<com.novabox.tv.data.RealDebrid.User?>(null)
+        private set
+    var debridTorrents by mutableStateOf<List<com.novabox.tv.data.RealDebrid.Torrent>>(emptyList())
+        private set
+    var debridDownloads by mutableStateOf<List<com.novabox.tv.data.RealDebrid.Download>>(emptyList())
+        private set
+    var debridLoading by mutableStateOf(false)
+        private set
+    var debridError by mutableStateOf<String?>(null)
+    var debridShelf by mutableStateOf(DebridShelf.TORRENTS)
+    var debridQuery by mutableStateOf("")
+    /** The torrent whose files are open in the side panel, and its files (null while loading). */
+    var debridOpen by mutableStateOf<com.novabox.tv.data.RealDebrid.Torrent?>(null)
+        private set
+    var debridFiles by mutableStateOf<List<com.novabox.tv.data.RealDebrid.RdFile>?>(null)
+        private set
+    /** Shown while a link is being turned into a stream, or why that failed. */
+    var debridPlayStatus by mutableStateOf<String?>(null)
+    private var debridJob: Job? = null
+    private var loginJob: Job? = null
+    private var filesJob: Job? = null
+
+    private fun rdMessage(e: Exception): String = when {
+        e is java.net.UnknownHostException -> "Real-Debrid couldn't be reached. Check the TV is online."
+        e is com.novabox.tv.data.RealDebrid.RdException && (e.code == 401 || e.code == 403) ->
+            "Real-Debrid refused the request (${e.message}). If your premium has ended or the link was removed, unlink and link again."
+        else -> "Real-Debrid: ${e.message ?: "something went wrong"}"
+    }
+
+    fun startDebridLogin() {
+        loginJob?.cancel()
+        debridLogin = DebridLogin.Starting
+        loginJob = viewModelScope.launch {
+            try {
+                val code = com.novabox.tv.data.RealDebrid.startLogin()
+                debridLogin = DebridLogin.Waiting(code)
+                while (System.currentTimeMillis() < code.expiresAt) {
+                    kotlinx.coroutines.delay(code.intervalSec * 1000L)
+                    if (com.novabox.tv.data.RealDebrid.pollLogin(code)) {
+                        debridLinked = true
+                        debridLogin = DebridLogin.Idle
+                        loadDebrid(force = true)
+                        return@launch
+                    }
+                }
+                debridLogin = DebridLogin.Failed("The code expired before it was entered. Get a new code to try again.")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debridLogin = DebridLogin.Failed(rdMessage(e))
+            }
+        }
+    }
+
+    fun cancelDebridLogin() { loginJob?.cancel(); debridLogin = DebridLogin.Idle }
+
+    fun unlinkDebrid() {
+        debridJob?.cancel(); filesJob?.cancel()
+        com.novabox.tv.data.RealDebrid.unlink()
+        debridLinked = false
+        debridUser = null; debridTorrents = emptyList(); debridDownloads = emptyList()
+        debridOpen = null; debridFiles = null; debridError = null
+    }
+
+    fun loadDebrid(force: Boolean = false) {
+        if (!debridLinked) return
+        if (!force && (debridUser != null || debridLoading)) return
+        debridJob?.cancel()
+        debridLoading = true
+        debridError = null
+        debridJob = viewModelScope.launch {
+            try {
+                debridUser = com.novabox.tv.data.RealDebrid.user()
+                debridTorrents = com.novabox.tv.data.RealDebrid.torrents()
+                debridDownloads = com.novabox.tv.data.RealDebrid.downloads()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debridError = rdMessage(e)
+            } finally {
+                debridLoading = false
+            }
+        }
+    }
+
+    fun openTorrent(t: com.novabox.tv.data.RealDebrid.Torrent) {
+        if (debridOpen?.id == t.id && debridFiles != null) return
+        filesJob?.cancel()
+        debridOpen = t
+        debridFiles = null
+        if (t.status != "downloaded") { debridFiles = emptyList(); return }
+        filesJob = viewModelScope.launch {
+            debridFiles = try {
+                com.novabox.tv.data.RealDebrid.torrentFiles(t.id)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debridPlayStatus = rdMessage(e); emptyList()
+            }
+        }
+    }
+
+    /** Unrestricts an RD link (torrent files) and opens the film player. */
+    fun playDebrid(title: String, link: String, alreadyDirect: Boolean, onPlay: (PlayRequest) -> Unit) {
+        viewModelScope.launch {
+            debridPlayStatus = "Getting the stream from Real-Debrid…"
+            try {
+                val url = if (alreadyDirect) link else com.novabox.tv.data.RealDebrid.unrestrict(link)
+                debridPlayStatus = null
+                onPlay(PlayRequest.Vod(title, url, null, subtitle = "Real-Debrid", direct = true))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debridPlayStatus = rdMessage(e)
+            }
+        }
     }
 
     // ------------------------------------------------------------- app updates

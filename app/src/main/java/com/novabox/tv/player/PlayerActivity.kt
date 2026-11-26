@@ -117,7 +117,7 @@ class PlayerActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val req = PlaybackHolder.request ?: run { finish(); return }
 
-        val direct = (req as? PlayRequest.Live)?.direct == true
+        val direct = (req as? PlayRequest.Live)?.direct == true || (req as? PlayRequest.Vod)?.direct == true
         val headers = if (direct) mapOf("User-Agent" to "NovaBox/${com.novabox.tv.BuildConfig.VERSION_NAME} (Android TV)")
             else AppGraph.client?.playbackHeaders().orEmpty()
         val http = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).followRedirects(true).build()
@@ -258,8 +258,8 @@ class PlayerActivity : ComponentActivity() {
 
         LaunchedEffect(req) {
             try {
-                val client = AppGraph.client ?: error("Not connected")
-                play(client.vodLink(req.cmd, req.episode))
+                if (req.direct) play(req.cmd)
+                else play((AppGraph.client ?: error("Not connected")).vodLink(req.cmd, req.episode))
                 status = null
             } catch (e: Exception) {
                 status = "Couldn't start playback: ${e.message}"

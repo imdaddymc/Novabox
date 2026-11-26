@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.automirrored.filled.List
@@ -58,6 +59,7 @@ private fun HomeTab.icon(): ImageVector = when (this) {
     HomeTab.SERIES -> Icons.AutoMirrored.Filled.List
     HomeTab.FAVORITES -> Icons.Filled.Favorite
     HomeTab.SEARCH -> Icons.Filled.Search
+    HomeTab.DEBRID -> Icons.Filled.Build
     HomeTab.SETTINGS -> Icons.Filled.Settings
 }
 
@@ -96,7 +98,7 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
                 Modifier.size(38.dp).background(Palette.accent, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center,
             ) { Text("N", fontSize = 22.sp, fontWeight = FontWeight.Black, color = androidx.compose.ui.graphics.Color.White) }
-            Spacer(Modifier.width(20.dp))
+            Spacer(Modifier.width(12.dp))
             Row(
                 Modifier.weight(1f).onFocusChanged { tabsFocused = it.hasFocus }
                     // Tabs change only when the user moves along the bar. If focus lands on a tab
@@ -105,15 +107,16 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
                     .onPreviewKeyEvent { e ->
                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         val step = when (e.key) { Key.DirectionLeft -> -1; Key.DirectionRight -> 1; else -> return@onPreviewKeyEvent false }
-                        val next = HomeTab.entries.getOrNull(HomeTab.entries.indexOf(vm.tab) + step)
+                        val tabs = vm.visibleTabs
+                        val next = tabs.getOrNull(tabs.indexOf(vm.tab) + step)
                         if (next != null) { vm.tab = next; runCatching { tabFocus.getValue(next).requestFocus() } }
                         true
                     }
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                HomeTab.entries.forEach { t ->
+                vm.visibleTabs.forEach { t ->
                     FocusSurface(
                         onClick = { vm.tab = t },
                         onFocus = { if (vm.tab != t) runCatching { tabFocus.getValue(vm.tab).requestFocus() } },
@@ -123,14 +126,14 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
                         container = androidx.compose.ui.graphics.Color.Transparent,
                         modifier = Modifier.focusRequester(tabFocus.getValue(t)),
                     ) { _ ->
-                        // Search and Settings show just their icon unless open, so all seven tabs
+                        // Search, Debrid and Settings show just their icon unless open, so all the tabs
                         // and the clock fit on a 1080p screen.
-                        val compact = t in setOf(HomeTab.SEARCH, HomeTab.SETTINGS) && vm.tab != t
-                        Row(Modifier.padding(horizontal = if (compact) 11.dp else 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        val compact = t in setOf(HomeTab.SEARCH, HomeTab.DEBRID, HomeTab.SETTINGS) && vm.tab != t
+                        Row(Modifier.padding(horizontal = if (compact) 10.dp else 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(t.icon(), t.label, Modifier.size(17.dp))
                             if (!compact) {
                                 Spacer(Modifier.width(6.dp))
-                                Text(t.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                                Text(t.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                             }
                         }
                     }
@@ -149,6 +152,7 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
                 HomeTab.SERIES -> VodScreen(vm, VodKind.SERIES)
                 HomeTab.FAVORITES -> FavoritesScreen(vm, onPlay)
                 HomeTab.SEARCH -> SearchScreen(vm, onPlay)
+                HomeTab.DEBRID -> DebridScreen(vm, onPlay)
                 HomeTab.SETTINGS -> SettingsScreen(vm)
             }
         }
@@ -177,5 +181,5 @@ private fun Clock() {
         while (true) { now = Date(); kotlinx.coroutines.delay(15_000) }
     }
     val fmt = rememberTimeFormat()
-    Text(fmt.format(now), modifier = Modifier.padding(start = 12.dp), fontSize = 20.sp, color = Palette.muted, fontWeight = FontWeight.Medium)
+    Text(fmt.format(now), modifier = Modifier.padding(start = 10.dp), fontSize = 18.sp, color = Palette.muted, fontWeight = FontWeight.Medium)
 }

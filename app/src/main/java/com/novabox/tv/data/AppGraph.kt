@@ -37,7 +37,8 @@ object AppGraph {
 sealed interface PlayRequest {
     /** [direct]: the channel's cmd is a plain stream URL (Free TV), not a portal command. */
     data class Live(val channels: List<Channel>, val index: Int, val direct: Boolean = false) : PlayRequest
-    data class Vod(val title: String, val cmd: String, val episode: Int?, val subtitle: String = "") : PlayRequest
+    /** [direct]: cmd is a plain stream URL (Real-Debrid), not a portal command. */
+    data class Vod(val title: String, val cmd: String, val episode: Int?, val subtitle: String = "", val direct: Boolean = false) : PlayRequest
 }
 
 object PlaybackHolder {

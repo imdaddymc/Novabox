@@ -1,6 +1,6 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1.0",
-  "notes": "Free TV, check for updates, stream resolution tag and fixes.",
+  "versionCode": 3,
+  "versionName": "1.2.0",
+  "notes": "Developer tools in Settings: unlock a Debrid tab to play from your Real-Debrid account.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

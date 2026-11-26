@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -99,6 +100,20 @@ fun SettingsScreen(vm: AppViewModel) {
             Spacer(Modifier.height(20.dp))
             UpdatesSection(vm)
             Spacer(Modifier.height(20.dp))
+            SectionTitle("DEVELOPER TOOLS")
+            Text(
+                if (vm.devTools) "Unlocked. The Debrid tab (wrench icon) plays films and episodes from your own Real-Debrid account."
+                else "Unlock to add a Debrid tab for playing films and episodes from your own Real-Debrid account.",
+                fontSize = 13.sp, color = Palette.muted,
+            )
+            Spacer(Modifier.height(10.dp))
+            // One button whose label flips, so focus stays put when pressed.
+            NovaButton(
+                if (vm.devTools) "Hide developer tools" else "Unlock developer tools",
+                { vm.setDeveloperTools(!vm.devTools) },
+                icon = Icons.Filled.Build,
+            )
+            Spacer(Modifier.height(20.dp))
             SectionTitle("DEVICE")
             vm.client?.let {
                 Text("Serial: ${it.serial}", fontSize = 13.sp, color = Palette.muted)
@@ -161,7 +176,7 @@ private fun UpdatesSection(vm: AppViewModel) {
 }
 
 @Composable
-fun ConfirmDialog(title: String, onYes: () -> Unit, onNo: () -> Unit) {
+fun ConfirmDialog(title: String, onYes: () -> Unit, onNo: () -> Unit, yesLabel: String = "Delete") {
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
     androidx.compose.ui.window.Dialog(onDismissRequest = onNo) {
@@ -170,7 +185,7 @@ fun ConfirmDialog(title: String, onYes: () -> Unit, onNo: () -> Unit) {
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = RowGap) {
                 NovaButton("Cancel", onNo, Modifier.focusRequester(fr))
-                NovaButton("Delete", onYes, primary = true)
+                NovaButton(yesLabel, onYes, primary = true)
             }
         }
     }

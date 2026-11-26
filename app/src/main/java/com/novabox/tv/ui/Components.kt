@@ -153,9 +153,9 @@ fun NovaButton(
 }
 
 @Composable
-fun SectionTitle(text: String, modifier: Modifier = Modifier) {
+fun SectionTitle(text: String, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
     Text(
-        text, modifier = modifier.padding(bottom = 10.dp),
+        text, modifier = modifier.padding(bottom = 10.dp), maxLines = maxLines, softWrap = maxLines == Int.MAX_VALUE,
         color = Palette.muted, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp,
     )
 }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +55,10 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(vm: AppViewModel) {
     val profiles by AppGraph.profiles.profiles.collectAsState()
     var confirmDelete by remember { mutableStateOf<Profile?>(null) }
+    var vpnNote by remember { mutableStateOf<String?>(null) }
+    var pickVpn by remember { mutableStateOf(false) }
+    vpnNote?.let { InfoDialog(it) { vpnNote = null } }
+    if (pickVpn) VpnPickerDialog(vm) { pickVpn = false }
     val addFocus = remember { FocusRequester() }
     LaunchedEffect(vm.activeProfile?.id) { if (vm.account == null) vm.loadAccount() }
 
@@ -114,6 +120,25 @@ fun SettingsScreen(vm: AppViewModel) {
                 { vm.setDeveloperTools(!vm.devTools) },
                 icon = Icons.Filled.Build,
             )
+            if (vm.devTools) {
+                Spacer(Modifier.height(20.dp))
+                SectionTitle("VPN APP")
+                LaunchedEffect(Unit) { while (true) { vm.refreshVpn(); kotlinx.coroutines.delay(5000) } }
+                Text(
+                    when {
+                        vm.vpnApp == null -> "Optional. Pick the VPN app you use (like Surfshark) and NovaBox can open it for you. Debrid works with or without a VPN."
+                        vm.vpnOn -> "${vm.vpnApp!!.name} · a VPN is on."
+                        else -> "${vm.vpnApp!!.name} · no VPN is on right now."
+                    },
+                    fontSize = 13.sp, color = if (vm.vpnApp != null && vm.vpnOn) Palette.teal else Palette.muted,
+                )
+                Spacer(Modifier.height(10.dp))
+                vm.vpnApp?.let { a ->
+                    NovaButton("Open ${a.name}", { vpnNote = vm.openVpnApp() }, icon = Icons.Filled.Lock)
+                    Spacer(Modifier.height(8.dp))
+                }
+                NovaButton(if (vm.vpnApp == null) "Choose VPN app" else "Change VPN app", { pickVpn = true }, icon = Icons.Filled.Edit)
+            }
             Spacer(Modifier.height(20.dp))
             SectionTitle("DEVICE")
             vm.client?.let {
@@ -219,6 +244,55 @@ fun ConfirmDialog(title: String, onYes: () -> Unit, onNo: () -> Unit, yesLabel: 
             Row(horizontalArrangement = RowGap) {
                 NovaButton("Cancel", onNo, Modifier.focusRequester(fr))
                 NovaButton(yesLabel, onYes, primary = true)
+            }
+        }
+    }
+}
+
+@Composable
+fun InfoDialog(message: String, onDismiss: () -> Unit) {
+    val fr = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.background(Palette.bg2, RoundedCornerShape(18.dp)).padding(28.dp).width(460.dp)) {
+            Text(message, fontSize = 17.sp)
+            Spacer(Modifier.height(20.dp))
+            NovaButton("OK", onDismiss, Modifier.focusRequester(fr), primary = true)
+        }
+    }
+}
+
+/** Lists the VPN apps on the TV; picking one saves it, "None" clears it. */
+@Composable
+fun VpnPickerDialog(vm: AppViewModel, onDismiss: () -> Unit) {
+    // Reading every app's services can take a moment on a TV with many apps, so do it off the main thread.
+    val found by androidx.compose.runtime.produceState<List<com.novabox.tv.data.VpnApps.VpnApp>?>(null) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { vm.installedVpnApps() }
+    }
+    val apps = found.orEmpty()
+    val fr = remember { FocusRequester() }
+    LaunchedEffect(found) { if (found != null) { kotlinx.coroutines.delay(50); runCatching { fr.requestFocus() } } }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.background(Palette.bg2, RoundedCornerShape(18.dp)).padding(28.dp).width(460.dp)) {
+            Text("Choose your VPN app", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (found == null) "Looking for VPN apps on this TV…"
+                else if (apps.isEmpty()) "No VPN apps are installed on this TV. Install one (for example Surfshark) from the Google Play Store, then come back here."
+                else "NovaBox will open it for you from Settings and the Debrid tab, so you can check it's connected.",
+                fontSize = 14.sp, color = Palette.muted,
+            )
+            Spacer(Modifier.height(16.dp))
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(apps.size) { i ->
+                    val a = apps[i]
+                    NovaButton(a.name, { vm.chooseVpnApp(a); onDismiss() }, if (i == 0) Modifier.focusRequester(fr) else Modifier,
+                        icon = if (vm.vpnApp?.pkg == a.pkg) Icons.Filled.Check else Icons.Filled.Lock)
+                }
+                item {
+                    NovaButton(if (vm.vpnApp == null) "Close" else "Don't use a VPN app", { vm.chooseVpnApp(null); onDismiss() },
+                        if (apps.isEmpty()) Modifier.focusRequester(fr) else Modifier, icon = Icons.Filled.Close)
+                }
             }
         }
     }

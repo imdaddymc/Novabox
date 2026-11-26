@@ -1,6 +1,13 @@
 package com.novabox.tv.ui
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Lock
 import com.novabox.tv.data.ShelfGroups
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -111,6 +118,12 @@ private fun DebridLink(vm: AppViewModel) {
 @Composable
 private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
     LaunchedEffect(Unit) { vm.loadDebrid() }
+    // Keep the VPN badge current while this tab is showing (information only; nothing is blocked)
+    LaunchedEffect(Unit) { while (true) { vm.refreshVpn(); kotlinx.coroutines.delay(5000) } }
+    var vpnNote by remember { mutableStateOf<String?>(null) }
+    var pickVpn by remember { mutableStateOf(false) }
+    vpnNote?.let { InfoDialog(it) { vpnNote = null } }
+    if (pickVpn) VpnPickerDialog(vm) { pickVpn = false }
     var editing by remember { mutableStateOf(false) }
     var confirmUnlink by remember { mutableStateOf(false) }
     if (editing) TextInputDialog("Search your Real-Debrid library", vm.debridQuery, onValue = { vm.debridQuery = it }, onDismiss = { editing = false })
@@ -125,54 +138,57 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
     val downloadCards = remember(downloads) { ShelfGroups.group(downloads, { "d" + it.id }, { it.name }) }
     /** The card whose details are in the side panel. */
     var openKey by remember { mutableStateOf<String?>(null) }
+    /** True while the remote is in the sidebar; otherwise it shrinks to icons. */
+    var sideOpen by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     LaunchedEffect(vm.debridShelf, q) { gridState.scrollToItem(0) }
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Left: account, search, shelves
-        Column(Modifier.width(196.dp).fillMaxHeight()) {
-            SectionTitle("REAL-DEBRID")
+        // Left: account, search, shelves. Only icons until the remote moves into it.
+        val sideWidth by animateDpAsState(if (sideOpen) 196.dp else 60.dp, label = "debridSide")
+        Column(Modifier.width(sideWidth).fillMaxHeight().onFocusChanged { sideOpen = it.hasFocus }) {
             val u = vm.debridUser
-            Text(u?.username ?: "…", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                when {
-                    u == null -> ""
-                    u.premium -> "Premium until ${u.expiration.take(10)}"
-                    else -> "Not premium: streams won't play"
-                },
-                fontSize = 13.sp, color = if (u != null && !u.premium) Palette.danger else Palette.muted,
-            )
-            Spacer(Modifier.height(14.dp))
-            FocusSurface(onClick = { editing = true }, focusedScale = 1.03f, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) { f ->
-                Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Search, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text(q.ifBlank { "Search" }, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = if (q.isBlank() && !f) Palette.muted else Color.Unspecified)
+            if (sideOpen) {
+                SectionTitle("REAL-DEBRID", maxLines = 1)
+                Text(u?.username ?: "…", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    when {
+                        u == null -> ""
+                        u.premium -> "Premium until ${u.expiration.take(10)}"
+                        else -> "Not premium: streams won't play"
+                    },
+                    fontSize = 13.sp, color = if (u != null && !u.premium) Palette.danger else Palette.muted, maxLines = 1,
+                )
+            } else {
+                Box(Modifier.fillMaxWidth().height(70.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.AccountCircle, "Real-Debrid account", Modifier.size(30.dp),
+                        tint = if (u != null && !u.premium) Palette.danger else Palette.muted)
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            SectionTitle("LIBRARY")
+            Spacer(Modifier.height(14.dp))
             Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
+                SideItem(Icons.Filled.Search, q.ifBlank { "Search" }, sideOpen, onClick = { editing = true },
+                    muted = q.isBlank(), active = q.isNotBlank())
+                if (sideOpen) { Spacer(Modifier.height(10.dp)); SectionTitle("LIBRARY", maxLines = 1) } else Spacer(Modifier.height(16.dp))
                 AppViewModel.DebridShelf.entries.forEach { shelf ->
                     val n = if (shelf == AppViewModel.DebridShelf.TORRENTS) torrentCards.size else downloadCards.size
-                    FocusSurface(
+                    SideItem(
+                        if (shelf == AppViewModel.DebridShelf.TORRENTS) Icons.Filled.List else Icons.Filled.KeyboardArrowDown,
+                        shelf.label, sideOpen, count = n, selected = vm.debridShelf == shelf,
                         onClick = { vm.debridShelf = shelf }, onFocus = { vm.debridShelf = shelf },
-                        selected = vm.debridShelf == shelf, focusedScale = 1.03f, modifier = Modifier.fillMaxWidth(),
-                    ) { f ->
-                        Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(shelf.label, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                            Text(n.toString(), fontSize = 12.sp, color = if (f) Color(0xFF39425A) else Palette.muted)
-                        }
-                    }
+                    )
                 }
+                Spacer(Modifier.height(16.dp))
+                SideItem(
+                    Icons.Filled.Lock,
+                    vm.vpnApp?.let { if (vm.vpnOn) "VPN on" else "Open ${it.name}" } ?: "VPN app",
+                    sideOpen,
+                    onClick = { if (vm.vpnApp == null) pickVpn = true else vpnNote = vm.openVpnApp() },
+                    tint = if (vm.vpnOn) Palette.teal else null,
+                )
+                SideItem(Icons.Filled.Refresh, "Refresh", sideOpen, onClick = { vm.loadDebrid(force = true) })
+                SideItem(Icons.Filled.Close, "Unlink", sideOpen, onClick = { confirmUnlink = true })
             }
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NovaButton("Refresh", { vm.loadDebrid(force = true) }, icon = Icons.Filled.Refresh)
-            }
-            Spacer(Modifier.height(8.dp))
-            NovaButton("Unlink", { confirmUnlink = true }, icon = Icons.Filled.Close)
         }
 
         // Middle: poster cards, one per film and one per show
@@ -218,7 +234,8 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
         }
 
         // Right: seasons and files of the open torrent card, or the episodes / film of a download card
-        Column(Modifier.width(290.dp).fillMaxHeight().padding(top = 26.dp)) {
+        val panelWidth by animateDpAsState(if (sideOpen) 290.dp else 340.dp, label = "debridPanel")
+        Column(Modifier.width(panelWidth).fillMaxHeight().padding(top = 26.dp)) {
             Column(Modifier.fillMaxWidth().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(20.dp)) {
                 vm.debridPlayStatus?.let {
                     Text(it, fontSize = 14.sp, color = if (it.startsWith("Getting")) Palette.accent else Palette.danger)
@@ -384,3 +401,27 @@ private fun torrentStatus(t: RealDebrid.Torrent): String = when (t.status) {
     else -> t.status.replace('_', ' ')
 }
 
+
+/** A sidebar entry: icon and label when the sidebar is open, the icon alone when it is shrunk. */
+@Composable
+private fun SideItem(
+    icon: ImageVector, label: String, open: Boolean, onClick: () -> Unit,
+    count: Int? = null, selected: Boolean = false, onFocus: (() -> Unit)? = null, muted: Boolean = false, active: Boolean = false,
+    tint: Color? = null,
+) {
+    FocusSurface(onClick = onClick, onFocus = onFocus, selected = selected || (!open && active), focusedScale = 1.03f, modifier = Modifier.fillMaxWidth()) { f ->
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = if (open) 14.dp else 0.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = if (open) Arrangement.Start else Arrangement.Center,
+        ) {
+            Icon(icon, label, Modifier.size(20.dp), tint = if (!f && tint != null) tint else androidx.tv.material3.LocalContentColor.current)
+            if (open) {
+                Spacer(Modifier.width(10.dp))
+                Text(label, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                    color = if (muted && !f) Palette.muted else Color.Unspecified)
+                if (count != null) Text(count.toString(), fontSize = 12.sp, color = if (f) Color(0xFF39425A) else Palette.muted)
+            }
+        }
+    }
+}

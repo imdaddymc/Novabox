@@ -29,6 +29,9 @@ the red, green, yellow or blue buttons.
   torrents and downloads as poster cards (posters from IMDb's public search, no key needed) and play them in the
   film player. Seasons and episodes of the same show share one card. It only shows what is already in your
   account; it doesn't search torrent sites
+- **VPN app** (Settings → VPN app, with developer tools unlocked): pick the VPN app you use, like Surfshark, and
+  NovaBox opens it with one press from Settings or the Debrid sidebar so you can check it's connected. NovaBox
+  shows whether a VPN is on but never requires one
 - Stream resolution (720p, 1080p, 4K…) shown briefly in the top-right corner when a new stream starts
 - Media3/ExoPlayer playback (HLS, MPEG-TS, MP4), with the portal's MAG headers sent to stream servers
 
@@ -43,7 +46,22 @@ the red, green, yellow or blue buttons.
 | ![Developer tools](docs/screenshots/09-developer-tools.png) Settings → Developer tools | ![Link code](docs/screenshots/10-debrid-link-code.png) Linking Real-Debrid with a code |
 | ![Debrid posters](docs/screenshots/13-debrid-posters.png) Your RD torrents as poster cards | ![Show with seasons](docs/screenshots/14-debrid-show-seasons.png) One card per show, with a chip per season |
 | ![Download episodes](docs/screenshots/15-debrid-download-episodes.png) Downloads: a show's episodes on one card | ![Automatic updates](docs/screenshots/16-automatic-updates.png) Settings → Automatic updates |
-| ![Update ready](docs/screenshots/17-update-ready.png) When Android needs a press, NovaBox asks on open | |
+| ![Update ready](docs/screenshots/17-update-ready.png) When Android needs a press, NovaBox asks on open | ![Sidebar as icons](docs/screenshots/18-debrid-sidebar-icons.png) Debrid sidebar shrinks to icons while you browse |
+| ![Sidebar open](docs/screenshots/19-debrid-sidebar-open.png) Press Left and it opens again | ![VPN app](docs/screenshots/20-vpn-app.png) Settings → VPN app (shown with a test VPN app) |
+
+## Using Surfshark with NovaBox
+
+NovaBox doesn't run a VPN itself. When the Surfshark app is connected, NovaBox's traffic (Debrid included) goes through it.
+
+1. On the TV, open the Google Play Store, search for **Surfshark**, install it and sign in.
+2. In Surfshark, open **Settings → VPN settings → Bypasser** (split tunnelling) if you only want some apps on the VPN,
+   choose **Route via VPN**, and add **NovaBox**. Skip this step to put the whole TV on the VPN.
+3. Connect Surfshark to a location.
+4. In NovaBox, go to **Settings → Developer tools** (unlock it if needed), then **VPN app → Choose VPN app → Surfshark**.
+5. From now on, the lock button in the Debrid sidebar (or **Open Surfshark** in Settings) opens Surfshark. The
+   button reads **VPN on** when NovaBox's connection is going through a VPN.
+
+If Real-Debrid refuses a link while the VPN is on, try a different Surfshark location: some VPN servers are blocked by Real-Debrid.
 
 ## Controls
 

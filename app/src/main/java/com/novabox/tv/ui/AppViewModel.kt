@@ -491,6 +491,26 @@ class AppViewModel : ViewModel() {
         }
     }
 
+    // ------------------------------------------------------------- VPN app (optional)
+
+    /** The VPN app picked in Settings; null if none. NovaBox never requires a VPN. */
+    var vpnApp by mutableStateOf(AppGraph.settings.vpnApp?.split('|', limit = 2)?.takeIf { it.size == 2 }?.let { com.novabox.tv.data.VpnApps.VpnApp(it[0], it[1]) })
+        private set
+    var vpnOn by mutableStateOf(false)
+        private set
+    fun refreshVpn() { vpnOn = com.novabox.tv.data.VpnApps.active(AppGraph.appContext) }
+    fun installedVpnApps() = com.novabox.tv.data.VpnApps.installed(AppGraph.appContext)
+    fun chooseVpnApp(app: com.novabox.tv.data.VpnApps.VpnApp?) {
+        vpnApp = app
+        AppGraph.settings.vpnApp = app?.let { "${it.pkg}|${it.name}" }
+    }
+    /** Opens the picked VPN app; returns a message if it can't. */
+    fun openVpnApp(): String? {
+        val app = vpnApp ?: return "Pick your VPN app first in Settings → VPN app."
+        return if (com.novabox.tv.data.VpnApps.open(AppGraph.appContext, app.pkg)) null
+        else "${app.name} doesn't seem to be installed any more. Pick another VPN app in Settings."
+    }
+
     // ------------------------------------------------------------- app updates
 
     sealed interface UpdateState {

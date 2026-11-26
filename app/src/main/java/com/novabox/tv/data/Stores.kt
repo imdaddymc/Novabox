@@ -100,6 +100,10 @@ class SettingsStore(context: Context) {
         get() = prefs.getLong("lastUpdateCheck", 0)
         set(v) { prefs.edit().putLong("lastUpdateCheck", v).apply() }
     /** Settings → Developer tools: shows the Debrid tab. */
+    /** The VPN app the user picked to open from NovaBox, as "package|name"; null if none. */
+    var vpnApp: String?
+        get() = prefs.getString("vpnApp", null)
+        set(v) { prefs.edit().putString("vpnApp", v).apply() }
     var devTools: Boolean
         get() = prefs.getBoolean("devTools", false)
         set(v) { prefs.edit().putBoolean("devTools", v).apply() }

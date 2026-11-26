@@ -13,6 +13,11 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
+    <!-- To find the VPN apps installed on the TV (their VPN service is private), so the user can pick one to open.
+         NovaBox is installed from GitHub, not Google Play. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        xmlns:tools="http://schemas.android.com/tools" tools:ignore="QueryAllPackagesPermission" />
+
     <application
         android:allowBackup="true"
         android:banner="@drawable/banner"

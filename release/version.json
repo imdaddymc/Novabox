@@ -1,6 +1,6 @@
 {
-  "versionCode": 4,
-  "versionName": "1.3.0",
-  "notes": "Poster cards and show grouping in the Debrid tab. Settings > App updates can now check daily and install on the next start-up.",
+  "versionCode": 5,
+  "versionName": "1.3.1",
+  "notes": "Debrid sidebar shrinks to icons so posters and details get more room. Settings > VPN app opens your VPN (like Surfshark) with one press.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

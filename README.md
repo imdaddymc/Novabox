@@ -24,6 +24,15 @@ the red, green, yellow or blue buttons.
 - Stream resolution (720p, 1080p, 4K…) shown briefly in the top-right corner when a new stream starts
 - Media3/ExoPlayer playback (HLS, MPEG-TS, MP4), with the portal's MAG headers sent to stream servers
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Home with all tabs](docs/screenshots/01-home-tabs.png) Live TV and the tab bar | ![Free TV](docs/screenshots/02-free-tv.png) Free TV: no login needed |
+| ![Choose a country](docs/screenshots/03-free-tv-country.png) Free TV country picker | ![Free TV category](docs/screenshots/04-free-tv-category.png) Free TV categories |
+| ![Settings](docs/screenshots/05-settings-updates.png) Settings with App updates | ![Update available](docs/screenshots/06-update-available.png) An update is available |
+| ![Android confirm](docs/screenshots/07-update-confirm.png) Android's update prompt | ![Error screen](docs/screenshots/08-error-free-tv-button.png) Connection error, with a Free TV shortcut |
+
 ## Controls
 
 | Where | How |

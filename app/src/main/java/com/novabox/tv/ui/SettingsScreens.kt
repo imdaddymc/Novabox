@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -42,11 +44,14 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.novabox.tv.data.AppGraph
 import com.novabox.tv.data.Profile
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val profiles by AppGraph.profiles.profiles.collectAsState()
     var confirmDelete by remember { mutableStateOf<Profile?>(null) }
+    val addFocus = remember { FocusRequester() }
     LaunchedEffect(vm.activeProfile?.id) { if (vm.account == null) vm.loadAccount() }
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
@@ -71,11 +76,14 @@ fun SettingsScreen(vm: AppViewModel) {
                     }
                 }
                 item {
-                    NovaButton("Add profile", { vm.push(Route.EditProfile(null)) }, icon = Icons.Filled.Add, modifier = Modifier.padding(top = 6.dp))
+                    NovaButton("Add profile", { vm.push(Route.EditProfile(null)) }, icon = Icons.Filled.Add, modifier = Modifier.padding(top = 6.dp).focusRequester(addFocus))
                 }
             }
         }
-        Column(Modifier.width(360.dp).fillMaxHeight().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(22.dp)) {
+        Column(
+            Modifier.width(360.dp).fillMaxHeight().background(Palette.bg2, RoundedCornerShape(16.dp))
+                .verticalScroll(rememberScrollState()).padding(22.dp)
+        ) {
             SectionTitle("ACCOUNT")
             val acc = vm.account
             if (acc == null) Text("No account details from this portal", color = Palette.muted, fontSize = 14.sp)
@@ -89,25 +97,67 @@ fun SettingsScreen(vm: AppViewModel) {
             SectionTitle("NETWORK")
             NovaButton("Run network check", { vm.push(Route.NetworkCheck) }, icon = Icons.Filled.Refresh)
             Spacer(Modifier.height(20.dp))
+            UpdatesSection(vm)
+            Spacer(Modifier.height(20.dp))
             SectionTitle("DEVICE")
             vm.client?.let {
                 Text("Serial: ${it.serial}", fontSize = 13.sp, color = Palette.muted)
             }
             Text("Channels loaded: ${vm.channels.size}", fontSize = 13.sp, color = Palette.muted)
-            Spacer(Modifier.height(20.dp))
-            SectionTitle("CONTROLS")
-            Text(
-                "D-pad, OK and Back do everything. Player: OK menu, ▲▼ channel, ◀ list.",
-                fontSize = 13.sp, color = Palette.muted,
-            )
-            Spacer(Modifier.height(20.dp))
-            Text("NovaBox 1.0.0", fontSize = 12.sp, color = Palette.muted)
         }
     }
 
     confirmDelete?.let { p ->
-        ConfirmDialog("Delete “${p.name.ifBlank { p.portalUrl }}”?", onYes = { vm.deleteProfile(p); confirmDelete = null }, onNo = { confirmDelete = null })
+        ConfirmDialog("Delete “${p.name.ifBlank { p.portalUrl }}”?", onYes = {
+            vm.deleteProfile(p); confirmDelete = null
+            vm.viewModelScope.launch { kotlinx.coroutines.delay(150); runCatching { addFocus.requestFocus() } }
+        }, onNo = { confirmDelete = null })
     }
+}
+
+@Composable
+private fun UpdatesSection(vm: AppViewModel) {
+    val installError by com.novabox.tv.data.Updater.installError.collectAsState()
+    LaunchedEffect(installError) { installError?.let { vm.updateInstallFailed(it); com.novabox.tv.data.Updater.installError.value = null } }
+    SectionTitle("APP UPDATES")
+    Text("NovaBox ${com.novabox.tv.data.Updater.currentVersion}", fontSize = 14.sp)
+    Spacer(Modifier.height(6.dp))
+    val s = vm.update
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    // After the user allows installs in Android's screen and comes back, carry on by itself.
+    LaunchedEffect(s) {
+        if (s is AppViewModel.UpdateState.NeedsPermission) {
+            while (!com.novabox.tv.data.Updater.canInstall(ctx)) kotlinx.coroutines.delay(1000)
+            vm.installUpdate(s.info)
+        }
+    }
+    val line = when (s) {
+        AppViewModel.UpdateState.Idle -> "Your profiles and favourites are kept when you update."
+        AppViewModel.UpdateState.Checking -> "Checking…"
+        AppViewModel.UpdateState.UpToDate -> "You have the latest version."
+        is AppViewModel.UpdateState.Available -> "Version ${s.info.versionName} is available." + (if (s.info.notes.isNotBlank()) " ${s.info.notes}" else "")
+        is AppViewModel.UpdateState.NeedsPermission -> "Allow NovaBox to install apps in the screen that opened, then press Back. The update continues by itself."
+        is AppViewModel.UpdateState.Downloading -> if (s.progress >= 0) "Downloading… ${(s.progress * 100).toInt()}%" else "Downloading…"
+        is AppViewModel.UpdateState.Installing -> "Choose \"Update\" on the screen Android shows. NovaBox then closes to update; open it again from your apps. Your profiles and favourites are kept."
+        is AppViewModel.UpdateState.Failed -> s.message
+    }
+    Text(line, fontSize = 13.sp, color = if (s is AppViewModel.UpdateState.Failed) Palette.danger else Palette.muted, maxLines = 4, overflow = TextOverflow.Ellipsis)
+    if (s is AppViewModel.UpdateState.Downloading && s.progress >= 0) ProgressBar(s.progress, Modifier.padding(top = 8.dp))
+    Spacer(Modifier.height(10.dp))
+    // One button whose label changes, rather than a different button per state, so the
+    // remote's focus stays on it while the state moves along.
+    val (label, action) = when (s) {
+        is AppViewModel.UpdateState.Available -> "Download and install" to { vm.installUpdate(s.info) }
+        is AppViewModel.UpdateState.NeedsPermission -> "Download and install" to { vm.installUpdate(s.info) }
+        is AppViewModel.UpdateState.Failed ->
+            if (s.info != null) "Try again" to { vm.installUpdate(s.info) } else "Check for updates" to { vm.checkForUpdates() }
+        AppViewModel.UpdateState.Checking -> "Checking…" to {}
+        is AppViewModel.UpdateState.Downloading -> "Downloading…" to {}
+        is AppViewModel.UpdateState.Installing -> "Install again" to { vm.installUpdate(s.info) }
+        else -> "Check for updates" to { vm.checkForUpdates() }
+    }
+    val ready = s is AppViewModel.UpdateState.Available || s is AppViewModel.UpdateState.NeedsPermission
+    NovaButton(label, action, icon = if (ready) Icons.Filled.Check else Icons.Filled.Refresh, primary = ready)
 }
 
 @Composable
@@ -133,7 +183,7 @@ private data class Field(val label: String, val get: (Profile) -> String, val se
 private val fields = listOf(
     Field("Profile name", { it.name }, { p, v -> p.copy(name = v) }, "e.g. Living room"),
     Field("Portal URL", { it.portalUrl }, { p, v -> p.copy(portalUrl = v.trim()) }, "http://example.com:8080/c/", type = KeyboardType.Uri),
-    Field("MAC address", { it.mac }, { p, v -> p.copy(mac = v.trim().uppercase()) }, "00:1A:79:XX:XX:XX"),
+    Field("MAC address", { it.mac }, { p, v -> p.copy(mac = Profile.normalizeMac(v)) }, "00:1A:79:XX:XX:XX (colons optional)"),
     Field("Serial number", { it.serial }, { p, v -> p.copy(serial = v.trim()) }, "Leave empty to generate"),
     Field("Device ID", { it.deviceId }, { p, v -> p.copy(deviceId = v.trim()) }, "Leave empty to generate"),
     Field("Device ID 2", { it.deviceId2 }, { p, v -> p.copy(deviceId2 = v.trim()) }, "Leave empty to copy Device ID"),
@@ -176,6 +226,8 @@ fun ProfileEditScreen(vm: AppViewModel, initial: Profile?, firstRun: Boolean) {
                 if (!firstRun) {
                     NovaButton("Save", { if (validate()) vm.saveProfile(p, connectNow = false) })
                     NovaButton("Cancel", { vm.pop() })
+                } else {
+                    NovaButton("Skip and watch Free TV", { vm.openFreeTvOnly() })
                 }
             }
         }

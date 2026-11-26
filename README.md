@@ -17,13 +17,18 @@ the red, green, yellow or blue buttons.
 - Search across channels, films and series
 - Account info from the portal (expiry date, plan)
 - Network check (Settings → Run network check, or from the "Couldn't connect" screen): tests the TV's connection, internet access and speed, the portal's address, server and login, and a live stream, then says what to fix
+- **Free TV**: channels that broadcasters stream free to the public, by country (from the
+  community list at iptv-org). No portal, profile or login needed; works even with no profiles set up
+- **Check for updates** (Settings → App updates): downloads the newest NovaBox from this repository and
+  installs it over the current one. Profiles, favourites and settings are kept
+- Stream resolution (720p, 1080p, 4K…) shown briefly in the top-right corner when a new stream starts
 - Media3/ExoPlayer playback (HLS, MPEG-TS, MP4), with the portal's MAG headers sent to stream servers
 
 ## Controls
 
 | Where | How |
 |---|---|
-| Top tab bar | Live TV · Movies · Series · Favourites · Search · Settings. Move with ◀ ▶, then ▼ into the page |
+| Top tab bar | Live TV · Free TV · Movies · Series · Favourites · Search · Settings. Move with ◀ ▶, then ▼ into the page |
 | Add a favourite | The ☆ button next to each channel, the **Favourite** button on a channel's panel, a film's or series' page, or in the player menu |
 | Search | Choose the **Search** tab, press OK on the search box and type with the on-screen keyboard |
 | Back | Inside a page, jumps back to the tab bar. On the tab bar, exits the app |
@@ -59,8 +64,19 @@ build isn't signed with a store key. Choose *Install anyway*.
 ## First run
 
 Enter your provider's **portal URL** (for example `http://example.com:8080/c/`) and the
-**MAC address** registered with them (usually starting `00:1A:79`). Most portals need nothing
+**MAC address** registered with them (usually starting `00:1A:79`; colons are optional). Most portals need nothing
 else. If yours checks the serial number, device ID or signature, enter those in the profile too.
+
+No portal yet? Choose **Skip and watch Free TV**.
+
+## Updating
+
+From version 1.1.0, use **Settings → App updates → Check for updates**. The first time, Android asks
+you to allow NovaBox to install apps: turn it on, press Back, and the update carries on by itself.
+Choose *Update* on Android's screen; NovaBox closes, then open it again from your apps.
+
+Version 1.0.0 has no update button, so install 1.1.0 over it once with Downloader (same link as
+before). Your profiles are kept because every NovaBox build is signed with the same key.
 
 ## Build it yourself
 
@@ -76,6 +92,8 @@ echo "sdk.dir=/path/to/Android/Sdk" > local.properties
 
 - `data/StalkerClient.kt`: portal protocol (handshake, profile, channels, EPG, VOD, series, stream links, keep-alive)
 - `data/Stores.kt`: profiles, favourites and settings
+- `data/FreeTv.kt`: Free TV country lists
+- `data/Updater.kt`: in-app updates from `release/version.json`
 - `ui/`: Compose for TV screens (tab bar, live TV, films/series, details, favourites, search, settings, profile editor)
 - `player/PlayerActivity.kt`: Media3 player with the live TV overlay and channel list
 

@@ -144,7 +144,7 @@ private fun GenreItem(title: String, count: Int, selected: Boolean, onSelect: ()
 
 @Composable
 private fun ChannelInfo(vm: AppViewModel, c: Channel, isFav: Boolean, onWatch: () -> Unit) {
-    val fmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val fmt = rememberTimeFormat(showAmPm = false)
     LaunchedEffect(c.id) { vm.loadEpg(c) }
     Column(
         Modifier.fillMaxWidth().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(22.dp)

@@ -21,6 +21,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
+// Mock-up generator from before emulator screenshots; it asserts nothing. Run by hand if needed.
+@org.junit.Ignore("Screenshot generator, not a check")
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [33], qualifiers = "w960dp-h540dp-land-television-xhdpi")

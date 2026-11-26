@@ -9,6 +9,7 @@ import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -71,6 +72,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -115,7 +117,9 @@ class PlayerActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val req = PlaybackHolder.request ?: run { finish(); return }
 
-        val headers = AppGraph.client?.playbackHeaders().orEmpty()
+        val direct = (req as? PlayRequest.Live)?.direct == true
+        val headers = if (direct) mapOf("User-Agent" to "NovaBox/${com.novabox.tv.BuildConfig.VERSION_NAME} (Android TV)")
+            else AppGraph.client?.playbackHeaders().orEmpty()
         val http = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).followRedirects(true).build()
         val dataSource = OkHttpDataSource.Factory(http)
             .setUserAgent(headers["User-Agent"])
@@ -141,7 +145,11 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    /** Bumped on every new stream so the resolution tag shows once per stream. */
+    private var streamSerial by mutableIntStateOf(0)
+
     private fun play(url: String) {
+        streamSerial++
         val item = MediaItem.Builder().setUri(url).apply {
             if (url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
         }.build()
@@ -189,6 +197,42 @@ class PlayerActivity : ComponentActivity() {
         )
     }
 
+    /** A small "1080p" tag in the top-right corner that fades out 3 seconds after a stream starts. */
+    @Composable
+    private fun ResolutionBadge(modifier: Modifier = Modifier) {
+        var label by remember { mutableStateOf("") }
+        var shows by remember { mutableIntStateOf(0) }
+        var visible by remember { mutableStateOf(false) }
+        val serial = streamSerial
+        DisposableEffect(serial) {
+            var shown = false
+            val l = object : Player.Listener {
+                override fun onVideoSizeChanged(videoSize: VideoSize) {
+                    if (!shown && videoSize.width > 0 && videoSize.height > 0) {
+                        shown = true
+                        label = resolutionLabel(videoSize.width, videoSize.height)
+                        shows++
+                    }
+                }
+            }
+            player.addListener(l)
+            onDispose { player.removeListener(l) }
+        }
+        LaunchedEffect(shows) {
+            if (shows == 0) return@LaunchedEffect
+            visible = true
+            delay(3000)
+            visible = false
+        }
+        AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut(tween(700)), modifier = modifier.padding(top = 28.dp, end = 32.dp)) {
+            Text(
+                label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.background(Color(0x8C000000), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+    }
+
     @Composable
     private fun usePlayerError(onError: (String) -> Unit) {
         DisposableEffect(Unit) {
@@ -231,7 +275,7 @@ class PlayerActivity : ComponentActivity() {
             }
         }
         LaunchedEffect(controls) { if (!controls) runCatching { rootFocus.requestFocus() } }
-        usePlayerError { status = "Playback error ($it)" }
+        usePlayerError { status = "This video couldn't play: ${streamProblem(it)}. Press Back to return." }
 
         fun poke() { controls = true; hideAt = System.currentTimeMillis() + 5000 }
         fun seek(deltaMs: Long) {
@@ -270,6 +314,7 @@ class PlayerActivity : ComponentActivity() {
                 }
         ) {
             Video(useController = false, texture = true)
+            ResolutionBadge(Modifier.align(Alignment.TopEnd))
             status?.let {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(req.title, fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -348,6 +393,11 @@ class PlayerActivity : ComponentActivity() {
             epg = emptyList()
             showBanner = true
             bannerUntil = System.currentTimeMillis() + 5000
+            if (req.direct) {
+                play(c.cmd)
+                status = null
+                return@LaunchedEffect
+            }
             AppGraph.settings.lastChannelId = c.id
             try {
                 val client = AppGraph.client ?: error("Not connected")
@@ -366,12 +416,18 @@ class PlayerActivity : ComponentActivity() {
             if (!showMenu && !showList) runCatching { rootFocus.requestFocus() }
         }
         usePlayerError { code ->
-            if (retries >= 3) { status = "This channel isn't playing right now ($code)"; return@usePlayerError }
+            if (retries >= (if (req.direct) 1 else 3)) {
+                status = "This channel isn't playing right now: ${streamProblem(code)}. Press ▲ or ▼ for another channel."
+                return@usePlayerError
+            }
             retries++
-            status = "Stream error ($code). Retrying…"
+            status = "The stream stopped. Trying again…"
             scope.launch {
                 delay(1500)
-                channel?.let { c -> runCatching { AppGraph.client?.liveLink(c) }.getOrNull()?.let { play(it); status = null } }
+                channel?.let { c ->
+                    if (req.direct) { play(c.cmd); status = null }
+                    else runCatching { AppGraph.client?.liveLink(c) }.getOrNull()?.let { play(it); status = null }
+                }
             }
         }
 
@@ -399,13 +455,14 @@ class PlayerActivity : ComponentActivity() {
                 }
         ) {
             Video(useController = false)
+            ResolutionBadge(Modifier.align(Alignment.TopEnd))
 
             status?.let {
                 Text(it, color = Color.White, modifier = Modifier.align(Alignment.Center).background(Color(0xAA000000), androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(18.dp))
             }
 
             AnimatedVisibility(showBanner || showMenu, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter)) {
-                if (channel != null) InfoBar(channel, epg, favs.any { it.id == channel.id }, showMenu,
+                if (channel != null) InfoBar(channel, epg, favs.any { it.id == channel.id }, showMenu, canFavourite = !req.direct,
                     onFav = { AppGraph.favorites.toggle(channel) },
                     onList = { showMenu = false; showList = true },
                     onPrev = { zap(-1) }, onNext = { zap(+1) },
@@ -425,7 +482,7 @@ class PlayerActivity : ComponentActivity() {
 
     @Composable
     private fun InfoBar(
-        c: Channel, epg: List<EpgEntry>, isFav: Boolean, menu: Boolean,
+        c: Channel, epg: List<EpgEntry>, isFav: Boolean, menu: Boolean, canFavourite: Boolean,
         onFav: () -> Unit, onList: () -> Unit, onPrev: () -> Unit, onNext: () -> Unit, onClose: () -> Unit,
     ) {
         val first = remember { FocusRequester() }
@@ -447,6 +504,7 @@ class PlayerActivity : ComponentActivity() {
                         Text(c.name, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (isFav) Text("  ★", color = Palette.gold, fontSize = 22.sp)
                     }
+                    if (c.note.isNotBlank()) Text(c.note, fontSize = 14.sp, color = Palette.muted)
                     if (now != null) {
                         Text("Now: ${now.title}", fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         ProgressBar(now.progressSafe(), Modifier.width(420.dp).padding(vertical = 6.dp))
@@ -457,8 +515,8 @@ class PlayerActivity : ComponentActivity() {
             if (menu) {
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = RowGap) {
-                    NovaButton(if (isFav) "Remove favourite" else "Favourite", onFav, Modifier.focusRequester(first), icon = Icons.Filled.Star, tint = if (isFav) Palette.gold else null)
-                    NovaButton("Channel list", onList, icon = Icons.AutoMirrored.Filled.List)
+                    if (canFavourite) NovaButton(if (isFav) "Remove favourite" else "Favourite", onFav, Modifier.focusRequester(first), icon = Icons.Filled.Star, tint = if (isFav) Palette.gold else null)
+                    NovaButton("Channel list", onList, if (canFavourite) Modifier else Modifier.focusRequester(first), icon = Icons.AutoMirrored.Filled.List)
                     NovaButton("Previous", onPrev, icon = Icons.Filled.KeyboardArrowDown)
                     NovaButton("Next", onNext, icon = Icons.Filled.KeyboardArrowUp)
                     NovaButton("Exit player", onClose, icon = Icons.AutoMirrored.Filled.ArrowBack)
@@ -503,3 +561,24 @@ private fun EpgEntry.progressSafe(): Float {
     return if (end > start && start > 0) ((now - start).toFloat() / (end - start)).coerceIn(0f, 1f) else 0f
 }
 
+
+/** "4K", "1080p", "720p"… judged mainly by width so letterboxed films (1920×800) still read as 1080p. */
+internal fun resolutionLabel(width: Int, height: Int): String {
+    val w = maxOf(width, height); val h = minOf(width, height)
+    return when {
+        w >= 3800 || h >= 2100 -> "4K"
+        w >= 2500 || h >= 1400 -> "1440p"
+        w >= 1900 || h >= 1060 -> "1080p"
+        w >= 1260 || h >= 700 -> "720p"
+        else -> "${h}p"
+    }
+}
+
+/** Plain words for a Media3 error code name, for the on-screen message. */
+internal fun streamProblem(code: String): String = when {
+    "BAD_HTTP_STATUS" in code || "FILE_NOT_FOUND" in code -> "the stream is offline"
+    "NETWORK" in code || "TIMEOUT" in code -> "it couldn't be reached"
+    "PARSING" in code || "DECODER" in code || "DECODING" in code || "UNSUPPORTED" in code -> "its format isn't supported on this TV"
+    "DRM" in code -> "it's copy-protected"
+    else -> "the stream failed"
+}

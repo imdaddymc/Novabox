@@ -13,15 +13,29 @@ android {
         applicationId = "com.novabox.tv"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
+    }
+
+    // Every NovaBox build must be signed with the same key, or Android refuses to
+    // install an update over the existing app. Set NOVABOX_KEYSTORE to the project's
+    // keystore; without it the local debug key (~/.android/debug.keystore) is used.
+    signingConfigs {
+        create("novabox") {
+            val ks = System.getenv("NOVABOX_KEYSTORE")?.let { file(it) }
+                ?: file(System.getProperty("user.home") + "/.android/debug.keystore")
+            storeFile = ks
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("novabox")
         }
     }
     compileOptions {
@@ -29,7 +43,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     testOptions {
         unitTests.isReturnDefaultValues = true
         unitTests.isIncludeAndroidResources = true

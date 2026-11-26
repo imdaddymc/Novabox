@@ -85,6 +85,13 @@ class SettingsStore(context: Context) {
     var bufferSeconds: Int
         get() = prefs.getInt("buffer", 3)
         set(v) { prefs.edit().putInt("buffer", v).apply() }
+    /** The user chose "Skip and watch Free TV" on first run, so open straight on Free TV. */
+    var skippedSetup: Boolean
+        get() = prefs.getBoolean("skippedSetup", false)
+        set(v) { prefs.edit().putBoolean("skippedSetup", v).apply() }
+    var freeTvCountry: String
+        get() = prefs.getString("freeTvCountry", null) ?: FreeTv.defaultCountry()
+        set(v) { prefs.edit().putString("freeTvCountry", v).apply() }
     var lastChannelId: String?
         get() = prefs.getString("lastChannel", null)
         set(v) { prefs.edit().putString("lastChannel", v).apply() }

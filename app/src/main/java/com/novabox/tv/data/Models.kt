@@ -55,6 +55,12 @@ data class Profile(
             return "00:1A:79:" + (0 until 3).joinToString(":") { "%02X".format(r.nextInt(256)) }
         }
 
+        /** Turns "001a79123456", "00-1A-79-12-34-56" or "00 1a 79 12 34 56" into "00:1A:79:12:34:56". */
+        fun normalizeMac(input: String): String {
+            val hex = input.filter { it.isLetterOrDigit() }.uppercase()
+            return if (hex.length == 12 && hex.all { it in "0123456789ABCDEF" }) hex.chunked(2).joinToString(":") else input.trim().uppercase()
+        }
+
         fun isValidMac(mac: String) = Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$").matches(mac.trim())
     }
 }
@@ -68,7 +74,9 @@ data class Channel(
     val cmd: String,
     val logo: String,
     val genreId: String,
-    val useTmpLink: Boolean,
+    val useTmpLink: Boolean = false,
+    /** Free TV only: quality and tags such as "720p · Not 24/7". */
+    val note: String = "",
 ) {
     fun toJson() = JSONObject().apply {
         put("id", id); put("name", name); put("number", number); put("cmd", cmd)

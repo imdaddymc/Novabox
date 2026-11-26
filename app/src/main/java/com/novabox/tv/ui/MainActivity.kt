@@ -120,6 +120,7 @@ private fun ErrorScreen(vm: AppViewModel, message: String) {
             NovaButton("Try again", { vm.activeProfile?.let(vm::connect) }, Modifier.focusRequester(fr), primary = true)
             NovaButton("Edit profile", { vm.push(Route.EditProfile(vm.activeProfile)) })
             NovaButton("Check network", { vm.push(Route.NetworkCheck) })
+            NovaButton("Free TV", { vm.openFreeTvOnly() })
             NovaButton("Other profiles", {
                 vm.backStack.clear(); vm.push(Route.Home); vm.tab = HomeTab.SETTINGS
             })

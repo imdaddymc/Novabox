@@ -32,7 +32,7 @@ sealed interface Route {
     data object NetworkCheck : Route
 }
 
-enum class HomeTab(val label: String) { LIVE("Live TV"), MOVIES("Movies"), SERIES("Series"), FAVORITES("Favourites"), SEARCH("Search"), SETTINGS("Settings") }
+enum class HomeTab(val label: String) { LIVE("Live TV"), FREE_TV("Free TV"), MOVIES("Movies"), SERIES("Series"), FAVORITES("Favourites"), SEARCH("Search"), SETTINGS("Settings") }
 
 /** Paged list of movies or series for one category. */
 class VodList {
@@ -82,13 +82,18 @@ class AppViewModel : ViewModel() {
     var toast by mutableStateOf<String?>(null)
 
     private var keepAliveJob: Job? = null
+    private var connectJob: Job? = null
 
     val client: StalkerClient? get() = AppGraph.client
 
     fun start() {
         if (backStack.isNotEmpty()) return
         val p = AppGraph.profiles.active
-        if (p == null) backStack.add(Route.EditProfile(null, firstRun = true)) else connect(p)
+        when {
+            p != null -> connect(p)
+            AppGraph.settings.skippedSetup -> openFreeTvOnly()
+            else -> backStack.add(Route.EditProfile(null, firstRun = true))
+        }
     }
 
     fun push(r: Route) { backStack.add(r) }
@@ -110,9 +115,13 @@ class AppViewModel : ViewModel() {
         backStack.add(Route.Connecting)
         genres = emptyList(); channels = emptyList(); categories.clear(); lists.clear(); epg.clear(); account = null
         selectedGenre = null; selectedCategory.clear()
+        connectJob?.cancel()
+        keepAliveJob?.cancel()
+        searchJob?.cancel(); searching = false
+        searchQuery = ""; searchChannels = emptyList(); searchMovies = emptyList(); searchSeries = emptyList()
         val c = StalkerClient(p)
         AppGraph.client = c
-        viewModelScope.launch {
+        connectJob = viewModelScope.launch {
             try {
                 c.login()
                 liveLoading = true
@@ -126,6 +135,8 @@ class AppViewModel : ViewModel() {
                 backStack.clear()
                 backStack.add(Route.Home)
                 startKeepAlive()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 liveLoading = false
                 backStack.clear()
@@ -151,7 +162,9 @@ class AppViewModel : ViewModel() {
 
     fun loadEpg(c: Channel) {
         epgJob?.cancel()
-        if (epg.containsKey(c.id)) return
+        val cached = epg[c.id]
+        val now = System.currentTimeMillis()
+        if (cached != null && (cached.isEmpty() || cached.any { it.start <= now && now < it.end })) return
         epgJob = viewModelScope.launch {
             delay(350) // wait until focus settles while scrolling
             val list = runCatching { client?.shortEpg(c.id, 6) }.getOrNull() ?: emptyList()
@@ -212,18 +225,22 @@ class AppViewModel : ViewModel() {
     fun search(q: String) {
         searchQuery = q
         searchJob?.cancel()
+        searching = false
         if (q.isBlank()) {
             searchChannels = emptyList(); searchMovies = emptyList(); searchSeries = emptyList(); return
         }
         searchJob = viewModelScope.launch {
             delay(500)
             searching = true
-            searchChannels = channels.filter { it.name.contains(q, ignoreCase = true) }.take(60)
-            val m = async { runCatching { client?.vodPage(VodKind.MOVIE, "*", 1, q)?.items }.getOrNull() ?: emptyList() }
-            val s = async { runCatching { client?.vodPage(VodKind.SERIES, "*", 1, q)?.items }.getOrNull() ?: emptyList() }
-            searchMovies = m.await()
-            searchSeries = s.await().map { it.copy(kind = VodKind.SERIES) }
-            searching = false
+            try {
+                searchChannels = channels.filter { it.name.contains(q.trim(), ignoreCase = true) }.take(60)
+                val m = async { runCatching { client?.vodPage(VodKind.MOVIE, "*", 1, q.trim())?.items }.getOrNull() ?: emptyList() }
+                val s = async { runCatching { client?.vodPage(VodKind.SERIES, "*", 1, q.trim())?.items }.getOrNull() ?: emptyList() }
+                searchMovies = m.await()
+                searchSeries = s.await().map { it.copy(kind = VodKind.SERIES) }
+            } finally {
+                searching = false
+            }
         }
     }
 
@@ -247,6 +264,120 @@ class AppViewModel : ViewModel() {
     }
 
     fun showToast(msg: String) { toast = msg }
+
+    // ------------------------------------------------------------- free TV
+
+    var freeCountry by mutableStateOf(AppGraph.settings.freeTvCountry)
+        private set
+    var freeChannels by mutableStateOf<List<Channel>>(emptyList())
+        private set
+    var freeLoading by mutableStateOf(false)
+        private set
+    var freeError by mutableStateOf<String?>(null)
+        private set
+    var freeGroup by mutableStateOf<String?>(null)
+    private var freeJob: Job? = null
+
+    fun loadFreeTv(force: Boolean = false) {
+        if (!force && (freeChannels.isNotEmpty() || freeLoading)) return
+        freeJob?.cancel()
+        freeLoading = true
+        freeError = null
+        val code = freeCountry
+        freeJob = viewModelScope.launch {
+            try {
+                freeChannels = com.novabox.tv.data.FreeTv.channels(code, forceRefresh = force)
+                freeGroup = null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                freeChannels = emptyList()
+                freeError = e.message ?: "Couldn't load free channels"
+            } finally {
+                freeLoading = false
+            }
+        }
+    }
+
+    fun chooseFreeCountry(code: String) {
+        if (code == freeCountry && freeChannels.isNotEmpty()) return
+        freeCountry = code
+        AppGraph.settings.freeTvCountry = code
+        freeChannels = emptyList()
+        freeGroup = null
+        freeLoading = false
+        loadFreeTv()
+    }
+
+    /** Opens the app on Free TV without any portal profile (from first run or a failed login). */
+    fun openFreeTvOnly() {
+        connectJob?.cancel()
+        liveLoading = false
+        if (channels.isEmpty()) { AppGraph.client = null; keepAliveJob?.cancel() }
+        if (AppGraph.profiles.profiles.value.isEmpty()) AppGraph.settings.skippedSetup = true
+        backStack.clear()
+        backStack.add(Route.Home)
+        tab = HomeTab.FREE_TV
+    }
+
+    // ------------------------------------------------------------- app updates
+
+    sealed interface UpdateState {
+        data object Idle : UpdateState
+        data object Checking : UpdateState
+        data object UpToDate : UpdateState
+        data class Available(val info: com.novabox.tv.data.UpdateInfo) : UpdateState
+        data class NeedsPermission(val info: com.novabox.tv.data.UpdateInfo) : UpdateState
+        data class Downloading(val info: com.novabox.tv.data.UpdateInfo, val progress: Float) : UpdateState
+        data class Installing(val info: com.novabox.tv.data.UpdateInfo) : UpdateState
+        data class Failed(val message: String, val info: com.novabox.tv.data.UpdateInfo? = null) : UpdateState
+    }
+
+    var update by mutableStateOf<UpdateState>(UpdateState.Idle)
+        private set
+
+    fun checkForUpdates() {
+        if (update is UpdateState.Checking || update is UpdateState.Downloading) return
+        update = UpdateState.Checking
+        viewModelScope.launch {
+            update = try {
+                com.novabox.tv.data.Updater.check()?.let { UpdateState.Available(it) } ?: UpdateState.UpToDate
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                UpdateState.Failed("Couldn't check for updates: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    fun installUpdate(info: com.novabox.tv.data.UpdateInfo) {
+        val ctx = AppGraph.appContext
+        if (!com.novabox.tv.data.Updater.canInstall(ctx)) {
+            update = UpdateState.NeedsPermission(info)
+            com.novabox.tv.data.Updater.openInstallPermission(ctx)
+            return
+        }
+        update = UpdateState.Downloading(info, 0f)
+        viewModelScope.launch {
+            try {
+                val apk = com.novabox.tv.data.Updater.download(ctx, info) { p ->
+                    viewModelScope.launch { if (update is UpdateState.Downloading) update = UpdateState.Downloading(info, p) }
+                }
+                update = UpdateState.Installing(info)
+                com.novabox.tv.data.Updater.install(ctx, apk)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                update = UpdateState.Failed("Update failed: ${e.message ?: e.javaClass.simpleName}", info)
+            }
+        }
+    }
+
+    /** Called when the installer reports a failure or the user cancels Android's prompt. */
+    fun updateInstallFailed(message: String) {
+        val info = (update as? UpdateState.Installing)?.info
+        update = UpdateState.Failed(message, info)
+    }
 
     // ------------------------------------------------------------- network check
 

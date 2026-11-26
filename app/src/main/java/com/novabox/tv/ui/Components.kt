@@ -238,3 +238,12 @@ fun Chip(text: String, modifier: Modifier = Modifier) {
 }
 
 val RowGap = Arrangement.spacedBy(12.dp)
+
+/** "21:30" or "9:30 PM", following the TV's 12/24-hour setting. */
+@androidx.compose.runtime.Composable
+fun rememberTimeFormat(showAmPm: Boolean = true): java.text.SimpleDateFormat {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    return androidx.compose.runtime.remember {
+        java.text.SimpleDateFormat(if (android.text.format.DateFormat.is24HourFormat(ctx)) "HH:mm" else if (showAmPm) "h:mm a" else "h:mm", java.util.Locale.getDefault())
+    }
+}

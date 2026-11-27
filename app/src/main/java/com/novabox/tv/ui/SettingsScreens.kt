@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.novabox.tv.data.AppGraph
 import com.novabox.tv.data.Profile
+import com.novabox.tv.data.StalkerClient
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 
@@ -105,6 +106,8 @@ fun SettingsScreen(vm: AppViewModel) {
             SectionTitle("NETWORK")
             NovaButton("Run network check", { vm.push(Route.NetworkCheck) }, icon = Icons.Filled.Refresh)
             Spacer(Modifier.height(20.dp))
+            PictureSection()
+            Spacer(Modifier.height(20.dp))
             UpdatesSection(vm)
             Spacer(Modifier.height(20.dp))
             SectionTitle("DEVELOPER TOOLS")
@@ -153,6 +156,33 @@ fun SettingsScreen(vm: AppViewModel) {
             vm.deleteProfile(p); confirmDelete = null
             vm.viewModelScope.launch { kotlinx.coroutines.delay(150); runCatching { addFocus.requestFocus() } }
         }, onNo = { confirmDelete = null })
+    }
+}
+
+/** Settings → Picture. Each button flips its own setting; the player reads them when it opens. */
+@Composable
+private fun PictureSection() {
+    val st = AppGraph.settings
+    var best by remember { mutableStateOf(st.bestQuality) }
+    var match by remember { mutableStateOf(st.matchFrameRate) }
+    var hdr by remember { mutableStateOf(st.hdrOutput) }
+    var sharpen by remember { mutableStateOf(st.sharpen) }
+    SectionTitle("PICTURE")
+    @Composable fun toggle(label: String, on: Boolean, note: String, flip: () -> Unit) {
+        NovaButton("$label: ${if (on) "On" else "Off"}", flip, icon = if (on) Icons.Filled.Check else Icons.Filled.Close)
+        Text(note, fontSize = 12.sp, color = Palette.muted, modifier = Modifier.padding(top = 6.dp, bottom = 12.dp))
+    }
+    toggle("Best quality", best, "When a stream comes in several qualities, always play the highest. Turn off if it keeps buffering.") {
+        best = !best; st.bestQuality = best
+    }
+    toggle("Match frame rate", match, "Switches the TV to the video's frame rate, so films don't judder. The screen may go dark for a second.") {
+        match = !match; st.matchFrameRate = match
+    }
+    toggle("HDR output", hdr, "Sends HDR films to the TV as HDR when the TV supports it.") {
+        hdr = !hdr; st.hdrOutput = hdr
+    }
+    toggle("Sharpen picture", sharpen, "A light sharpen filter for soft, low-quality channels. It can't add detail that isn't in the stream.") {
+        sharpen = !sharpen; st.sharpen = sharpen
     }
 }
 
@@ -300,20 +330,38 @@ fun VpnPickerDialog(vm: AppViewModel, onDismiss: () -> Unit) {
 
 // ------------------------------------------------------------------ profile editor
 
-private data class Field(val label: String, val get: (Profile) -> String, val set: (Profile, String) -> Profile, val hint: String = "", val password: Boolean = false, val type: KeyboardType = KeyboardType.Text)
+private data class Field(val label: String, val get: (Profile) -> String, val set: (Profile, String) -> Profile, val hint: (Profile) -> String = { "" }, val password: Boolean = false, val type: KeyboardType = KeyboardType.Text)
 
-private val fields = listOf(
-    Field("Profile name", { it.name }, { p, v -> p.copy(name = v) }, "e.g. Living room"),
-    Field("Portal URL", { it.portalUrl }, { p, v -> p.copy(portalUrl = v.trim()) }, "http://example.com:8080/c/", type = KeyboardType.Uri),
-    Field("MAC address", { it.mac }, { p, v -> p.copy(mac = Profile.normalizeMac(v)) }, "00:1A:79:XX:XX:XX (colons optional)"),
-    Field("Serial number", { it.serial }, { p, v -> p.copy(serial = v.trim()) }, "Leave empty to generate"),
-    Field("Device ID", { it.deviceId }, { p, v -> p.copy(deviceId = v.trim()) }, "Leave empty to generate"),
-    Field("Device ID 2", { it.deviceId2 }, { p, v -> p.copy(deviceId2 = v.trim()) }, "Leave empty to copy Device ID"),
-    Field("Signature", { it.signature }, { p, v -> p.copy(signature = v.trim()) }, "Leave empty to generate"),
-    Field("Portal login", { it.login }, { p, v -> p.copy(login = v) }, "Only if your portal asks for one"),
-    Field("Portal password", { it.password }, { p, v -> p.copy(password = v) }, "Only if your portal asks for one", password = true),
-    Field("Time zone", { it.timezone }, { p, v -> p.copy(timezone = v.trim()) }, "e.g. Europe/London"),
-    Field("Custom user agent", { it.userAgent }, { p, v -> p.copy(userAgent = v) }, "Leave empty for the MAG default"),
+/** One line of the profile editor: a section title, a text field, or a row of choices. */
+private sealed interface EditRow {
+    data class Title(val text: String, val note: String = "") : EditRow
+    data class Text(val field: Field) : EditRow
+    data class Choice(val label: String, val options: List<Pair<String, String>>, val get: (Profile) -> String, val set: (Profile, String) -> Profile) : EditRow
+}
+
+private fun auto(v: String) = "Auto: $v"
+
+/** Laid out like a MAG box's own STB settings, so values from another app are easy to copy over. */
+private val editRows: List<EditRow> = listOf(
+    EditRow.Title("PORTAL"),
+    EditRow.Text(Field("Profile name", { it.name }, { p, v -> p.copy(name = v) }, { "e.g. Living room" })),
+    EditRow.Text(Field("Portal URL", { it.portalUrl }, { p, v -> p.copy(portalUrl = v.trim()) }, { "http://example.com:8080/c/" }, type = KeyboardType.Uri)),
+    EditRow.Text(Field("Portal login", { it.login }, { p, v -> p.copy(login = v) }, { "Only if your portal asks for one" })),
+    EditRow.Text(Field("Portal password", { it.password }, { p, v -> p.copy(password = v) }, { "Only if your portal asks for one" }, password = true)),
+    EditRow.Title("STB SETTINGS", "Leave a field empty to use the value shown."),
+    EditRow.Choice("STB model", Profile.MODELS.map { it to it }, { it.stbModel }, { p, v -> p.copy(stbModel = v) }),
+    EditRow.Text(Field("Firmware", { it.firmware }, { p, v -> p.copy(firmware = v.trim()) }, { auto("MAG 0.2.18-r23 (Sep 2018)") })),
+    EditRow.Text(Field("Image version", { it.imageVersion }, { p, v -> p.copy(imageVersion = v.trim()) }, { auto(Profile.DEFAULT_IMAGE_VERSION) })),
+    EditRow.Text(Field("Hardware version", { it.hwVersion }, { p, v -> p.copy(hwVersion = v.trim()) }, { auto(Profile.DEFAULT_HW_VERSION) })),
+    EditRow.Text(Field("User agent", { it.userAgent }, { p, v -> p.copy(userAgent = v) }, { auto(Profile.defaultUserAgent(it.stbModel.ifBlank { "MAG250" })) })),
+    EditRow.Choice("Screen resolution", Profile.RESOLUTIONS, { it.resolution }, { p, v -> p.copy(resolution = v) }),
+    EditRow.Text(Field("MAC address", { it.mac }, { p, v -> p.copy(mac = Profile.normalizeMac(v)) }, { "00:1A:79:XX:XX:XX (colons optional)" })),
+    EditRow.Text(Field("Serial number", { it.serial }, { p, v -> p.copy(serial = v.trim()) }, { auto(StalkerClient.defaultSerial(it.mac)) })),
+    EditRow.Text(Field("Device ID", { it.deviceId }, { p, v -> p.copy(deviceId = v.trim()) }, { auto(StalkerClient.defaultDeviceId(it.mac)) })),
+    EditRow.Text(Field("Device ID 2", { it.deviceId2 }, { p, v -> p.copy(deviceId2 = v.trim()) }, { "Auto: same as Device ID" })),
+    EditRow.Text(Field("Signature", { it.signature }, { p, v -> p.copy(signature = v.trim()) }, { "Auto: worked out from serial and MAC" })),
+    EditRow.Title("REGION"),
+    EditRow.Text(Field("Time zone", { it.timezone }, { p, v -> p.copy(timezone = v.trim()) }, { "e.g. Europe/London" })),
 )
 
 @Composable
@@ -354,24 +402,29 @@ fun ProfileEditScreen(vm: AppViewModel, initial: Profile?, firstRun: Boolean) {
             }
         }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(6.dp)) {
-            items(fields.size) { i ->
-                val f = fields[i]
-                Column {
-                FieldRow(f.label, f.get(p).let { if (f.password && it.isNotEmpty()) "••••••" else it }, f.hint, Modifier.then(if (i == 0) Modifier.focusRequester(first) else Modifier)) { editing = f }
-                if (f.label == "MAC address") {
-                    Row(Modifier.padding(top = 10.dp), horizontalArrangement = RowGap) {
-                        NovaButton("Random MAC", { p = p.copy(mac = Profile.randomMac()) })
+            items(editRows.size) { i ->
+                when (val row = editRows[i]) {
+                    is EditRow.Title -> Column(Modifier.padding(top = if (i == 0) 0.dp else 14.dp)) {
+                        SectionTitle(row.text)
+                        if (row.note.isNotEmpty()) Text(row.note, color = Palette.muted, fontSize = 13.sp)
                     }
-                }
-                }
-            }
-            item {
-                Column {
-                    SectionTitle("STB MODEL")
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(4.dp)) {
-                        items(Profile.MODELS) { m ->
-                            FocusSurface(onClick = { p = p.copy(stbModel = m) }, selected = p.stbModel == m, shape = RoundedCornerShape(50)) { _ ->
-                                Text(m, Modifier.padding(horizontal = 16.dp, vertical = 9.dp), fontSize = 14.sp)
+                    is EditRow.Text -> Column {
+                        val f = row.field
+                        FieldRow(f.label, f.get(p).let { if (f.password && it.isNotEmpty()) "••••••" else it }, f.hint(p),
+                            Modifier.then(if (i == 1) Modifier.focusRequester(first) else Modifier)) { editing = f }
+                        if (f.label == "MAC address") {
+                            Row(Modifier.padding(top = 10.dp), horizontalArrangement = RowGap) {
+                                NovaButton("Random MAC", { p = p.copy(mac = Profile.randomMac()) })
+                            }
+                        }
+                    }
+                    is EditRow.Choice -> Column {
+                        Text(row.label, fontSize = 15.sp, color = Palette.muted, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(4.dp)) {
+                            items(row.options) { (value, label) ->
+                                FocusSurface(onClick = { p = row.set(p, value) }, selected = row.get(p) == value, shape = RoundedCornerShape(50)) { _ ->
+                                    Text(label, Modifier.padding(horizontal = 16.dp, vertical = 9.dp), fontSize = 14.sp)
+                                }
                             }
                         }
                     }

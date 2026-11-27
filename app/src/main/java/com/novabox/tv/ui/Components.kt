@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,6 +26,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -182,6 +186,8 @@ fun PosterCard(
     modifier: Modifier = Modifier,
     favorite: Boolean = false,
     onFocus: (() -> Unit)? = null,
+    /** How far through it the user is, drawn as a bar under the poster. */
+    progress: Float? = null,
 ) {
     FocusSurface(onClick = onClick, modifier = modifier, focusedScale = 1.07f, onFocus = onFocus) { focused ->
         Column {
@@ -197,6 +203,11 @@ fun PosterCard(
                 }
                 if (favorite) {
                     Text("★", color = Palette.gold, fontSize = 22.sp, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                }
+                if (progress != null) {
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(5.dp).background(Color(0x99000000))) {
+                        Box(Modifier.fillMaxWidth(progress.coerceIn(0.02f, 1f)).height(5.dp).background(Palette.teal))
+                    }
                 }
             }
             Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
@@ -246,4 +257,15 @@ fun rememberTimeFormat(showAmPm: Boolean = true): java.text.SimpleDateFormat {
     return androidx.compose.runtime.remember {
         java.text.SimpleDateFormat(if (android.text.format.DateFormat.is24HourFormat(ctx)) "HH:mm" else if (showAmPm) "h:mm a" else "h:mm", java.util.Locale.getDefault())
     }
+}
+
+/**
+ * Runs [action] on the remote's Back for a panel with a list in it. BackHandler alone isn't
+ * enough there: Compose first uses Back to move focus out of the list, so the panel stayed open
+ * with nothing focused.
+ */
+fun Modifier.onBackKey(action: () -> Unit): Modifier = this.onPreviewKeyEvent { e ->
+    if (e.key != androidx.compose.ui.input.key.Key.Back) return@onPreviewKeyEvent false
+    if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyUp) action()
+    true
 }

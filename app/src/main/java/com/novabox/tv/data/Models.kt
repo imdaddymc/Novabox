@@ -20,17 +20,32 @@ data class Profile(
     val timezone: String = java.util.TimeZone.getDefault().id,
     val language: String = "en",
     val userAgent: String = "",
+    /** The firmware ("ver") string sent to the portal. Blank uses [DEFAULT_FIRMWARE]. */
+    val firmware: String = "",
+    val imageVersion: String = "",
+    val hwVersion: String = "",
+    /** Largest picture to play, as "1920x1080"; blank plays whatever the stream offers. */
+    val resolution: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("portalUrl", portalUrl); put("mac", mac)
         put("stbModel", stbModel); put("serial", serial); put("deviceId", deviceId)
         put("deviceId2", deviceId2); put("signature", signature); put("login", login)
         put("password", password); put("timezone", timezone); put("language", language)
-        put("userAgent", userAgent)
+        put("userAgent", userAgent); put("firmware", firmware); put("imageVersion", imageVersion)
+        put("hwVersion", hwVersion); put("resolution", resolution)
     }
 
     companion object {
         const val DEFAULT_MAC = "00:1A:79:00:00:00"
+        const val DEFAULT_FIRMWARE = "ImageDescription: 0.2.18-r23-250; ImageDate: Thu Sep 13 11:31:16 EEST 2018; PORTAL version: 5.6.2; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x58c"
+        const val DEFAULT_IMAGE_VERSION = "218"
+        const val DEFAULT_HW_VERSION = "1.7-BD-00"
+        /** Screen resolutions offered in the editor; "" means no limit. */
+        val RESOLUTIONS = listOf("" to "Auto", "1280x720" to "720p", "1920x1080" to "1080p", "3840x2160" to "4K")
+
+        fun defaultUserAgent(model: String) =
+            "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) $model stbapp ver: 2 rev: 250 Safari/533.3"
         val MODELS = listOf("MAG250", "MAG254", "MAG256", "MAG322", "MAG324", "MAG349", "MAG351", "MAG424", "MAG520", "AuraHD")
 
         fun fromJson(o: JSONObject) = Profile(
@@ -48,6 +63,10 @@ data class Profile(
             timezone = o.optString("timezone", java.util.TimeZone.getDefault().id),
             language = o.optString("language", "en"),
             userAgent = o.optString("userAgent"),
+            firmware = o.optString("firmware"),
+            imageVersion = o.optString("imageVersion"),
+            hwVersion = o.optString("hwVersion"),
+            resolution = o.optString("resolution"),
         )
 
         fun randomMac(): String {

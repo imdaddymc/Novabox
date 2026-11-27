@@ -29,14 +29,12 @@ class StalkerClient(val profile: Profile) {
 
     private val mac = profile.mac.trim().uppercase()
     private val model = profile.stbModel.ifBlank { "MAG250" }
-    val serial = profile.serial.ifBlank { md5(mac).uppercase().take(13) }
-    private val deviceId = profile.deviceId.ifBlank { sha256(mac).uppercase() }
+    val serial = profile.serial.ifBlank { defaultSerial(mac) }
+    private val deviceId = profile.deviceId.ifBlank { defaultDeviceId(mac) }
     private val deviceId2 = profile.deviceId2.ifBlank { deviceId }
     private val signature = profile.signature.ifBlank { sha256(serial + mac).uppercase() }
 
-    val userAgent: String = profile.userAgent.ifBlank {
-        "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) $model stbapp ver: 2 rev: 250 Safari/533.3"
-    }
+    val userAgent: String = profile.userAgent.ifBlank { Profile.defaultUserAgent(model) }
 
     private var endpoint: String = ""
     private var referer: String = ""
@@ -117,10 +115,10 @@ class StalkerClient(val profile: Profile) {
         val r = rawCall(
             mapOf(
                 "type" to "stb", "action" to "get_profile", "hd" to "1",
-                "ver" to "ImageDescription: 0.2.18-r23-250; ImageDate: Thu Sep 13 11:31:16 EEST 2018; PORTAL version: 5.6.2; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x58c",
+                "ver" to profile.firmware.ifBlank { Profile.DEFAULT_FIRMWARE },
                 "num_banks" to "2", "sn" to serial, "stb_type" to model, "client_type" to "STB",
-                "image_version" to "218", "video_out" to "hdmi", "device_id" to deviceId, "device_id2" to deviceId2,
-                "signature" to signature, "auth_second_step" to "1", "hw_version" to "1.7-BD-00",
+                "image_version" to profile.imageVersion.ifBlank { Profile.DEFAULT_IMAGE_VERSION }, "video_out" to "hdmi", "device_id" to deviceId, "device_id2" to deviceId2,
+                "signature" to signature, "auth_second_step" to "1", "hw_version" to profile.hwVersion.ifBlank { Profile.DEFAULT_HW_VERSION },
                 "not_valid_token" to "0", "metrics" to metrics, "hw_version_2" to sha1(mac),
                 "timestamp" to (System.currentTimeMillis() / 1000).toString(), "api_signature" to "262", "prehash" to "",
             )
@@ -369,5 +367,8 @@ class StalkerClient(val profile: Profile) {
         fun md5(s: String) = hash("MD5", s)
         fun sha1(s: String) = hash("SHA-1", s)
         fun sha256(s: String) = hash("SHA-256", s)
+        /** What a blank serial number or device ID becomes for this MAC (shown in the profile editor too). */
+        fun defaultSerial(mac: String) = md5(mac.trim().uppercase()).uppercase().take(13)
+        fun defaultDeviceId(mac: String) = sha256(mac.trim().uppercase()).uppercase()
     }
 }

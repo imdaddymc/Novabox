@@ -109,7 +109,35 @@ object FreeTv {
                 }
             }
         }
-        return out
+        return bestFirst(out)
+    }
+
+    /** The stream's height from its label ("1080p" → 1080), or 0 when the list doesn't say. */
+    fun height(c: Channel): Int = Regex("""\b(\d{3,4})p\b""").find(c.note)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+    /**
+     * Free streams are checked by iptv-org with ordinary browser and player requests; some servers
+     * refuse an unknown app name, so playback and the channel check look like a regular browser.
+     */
+    const val USER_AGENT = "Mozilla/5.0 (Linux; Android 12; Android TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+    /** "HD · 1080p and up" in Free TV. */
+    const val HD_MIN = 1080
+
+    /**
+     * When a channel is listed more than once (720p and 1080p feeds), its sharpest feed moves to
+     * where the channel first appears, so it is the one picked first. The others stay as backups.
+     */
+    internal fun bestFirst(list: List<Channel>): List<Channel> {
+        val byName = list.groupBy { it.name.lowercase() }
+        val seen = HashSet<String>()
+        val out = ArrayList<Channel>(list.size)
+        for (c in list) {
+            val k = c.name.lowercase()
+            if (!seen.add(k)) continue
+            out += byName.getValue(k).sortedByDescending { height(it) } // stable: equal heights keep list order
+        }
+        return out.mapIndexed { i, c -> c.copy(number = i + 1) }
     }
 
     private val attr = Regex("""([a-zA-Z-]+)="([^"]*)"""")

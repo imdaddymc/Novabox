@@ -99,15 +99,42 @@ class SettingsStore(context: Context) {
     var lastUpdateCheck: Long
         get() = prefs.getLong("lastUpdateCheck", 0)
         set(v) { prefs.edit().putLong("lastUpdateCheck", v).apply() }
-    /** Settings → Developer tools: shows the Debrid tab. */
     /** The VPN app the user picked to open from NovaBox, as "package|name"; null if none. */
     var vpnApp: String?
         get() = prefs.getString("vpnApp", null)
         set(v) { prefs.edit().putString("vpnApp", v).apply() }
+    /** Settings → Developer tools: shows the Debrid tab. */
     var devTools: Boolean
         get() = prefs.getBoolean("devTools", false)
         set(v) { prefs.edit().putBoolean("devTools", v).apply() }
     var lastChannelId: String?
         get() = prefs.getString("lastChannel", null)
         set(v) { prefs.edit().putString("lastChannel", v).apply() }
+    /** Audio language picked last in the player (ISO 639 code), tried first next time; null = the stream's default. */
+    var audioLang: String?
+        get() = prefs.getString("audioLang", null)
+        set(v) { prefs.edit().putString("audioLang", v).apply() }
+    /** Subtitle language picked last, or [SUBS_OFF]; null = the stream's default. */
+    var subtitleLang: String?
+        get() = prefs.getString("subtitleLang", null)
+        set(v) { prefs.edit().putString("subtitleLang", v).apply() }
+
+    /** Settings → Picture: always take the highest-quality version of a stream that offers several. */
+    var bestQuality: Boolean
+        get() = prefs.getBoolean("bestQuality", true)
+        set(v) { prefs.edit().putBoolean("bestQuality", v).apply() }
+    /** Switch the TV's refresh rate to the video's frame rate (24p films stop juddering). */
+    var matchFrameRate: Boolean
+        get() = prefs.getBoolean("matchFrameRate", false)
+        set(v) { prefs.edit().putBoolean("matchFrameRate", v).apply() }
+    /** Send HDR films to the TV as HDR when it supports it. */
+    var hdrOutput: Boolean
+        get() = prefs.getBoolean("hdrOutput", true)
+        set(v) { prefs.edit().putBoolean("hdrOutput", v).apply() }
+    /** A light sharpen filter for soft, low-quality channels. */
+    var sharpen: Boolean
+        get() = prefs.getBoolean("sharpen", false)
+        set(v) { prefs.edit().putBoolean("sharpen", v).apply() }
+
+    companion object { const val SUBS_OFF = "off" }
 }

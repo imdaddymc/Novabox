@@ -24,6 +24,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 
 sealed interface Route {
     data object Connecting : Route
@@ -114,9 +115,11 @@ class AppViewModel : ViewModel() {
         AppGraph.profiles.activeId = p.id
         activeProfile = p
         AppGraph.favorites.switchProfile(p.id)
+        AppGraph.watch.switchProfile(p.id)
+        AppGraph.recent.switchProfile(p.id)
         backStack.clear()
         backStack.add(Route.Connecting)
-        genres = emptyList(); channels = emptyList(); categories.clear(); lists.clear(); epg.clear(); account = null
+        genres = emptyList(); channels = emptyList(); categories.clear(); lists.clear(); epg.clear(); guideAsked.clear(); account = null
         selectedGenre = null; selectedCategory.clear()
         connectJob?.cancel()
         keepAliveJob?.cancel()
@@ -165,8 +168,29 @@ class AppViewModel : ViewModel() {
 
     // ------------------------------------------------------------- live
 
-    fun channelsFor(genreId: String?): List<Channel> =
-        if (genreId == null) channels else channels.filter { it.genreId == genreId }
+    fun channelsFor(genreId: String?): List<Channel> = when (genreId) {
+        null, GUIDE -> channels
+        RECENT -> AppGraph.recent.channels.value.mapNotNull { r -> channels.firstOrNull { it.id == r.id } }
+        else -> channels.filter { it.genreId == genreId }
+    }
+
+    private val guideAsked = mutableSetOf<String>()
+    private val guideLimit = kotlinx.coroutines.sync.Semaphore(4)
+
+    /** Loads a longer guide for one row of the TV guide; a few channels at a time. */
+    fun loadGuide(c: Channel) {
+        if (!guideAsked.add(c.id)) return
+        viewModelScope.launch {
+            val list = guideLimit.withPermit { runCatching { client?.shortEpg(c.id, 12) }.getOrNull() }
+            if (list != null) epg[c.id] = list else guideAsked.remove(c.id)
+        }
+    }
+
+    companion object {
+        /** Live TV pseudo-categories. */
+        const val GUIDE = "__guide"
+        const val RECENT = "__recent"
+    }
 
     fun loadEpg(c: Channel) {
         epgJob?.cancel()
@@ -285,6 +309,46 @@ class AppViewModel : ViewModel() {
         private set
     var freeGroup by mutableStateOf<String?>(null)
     private var freeJob: Job? = null
+    /** The whole list from iptv-org; [freeChannels] leaves out streams the monthly check found dead. */
+    private var freeAll: List<Channel> = emptyList()
+    var freeHidden by mutableStateOf(0)
+        private set
+    /** "Checking 40 of 257…" while the channel check runs, else null. */
+    var freeChecking by mutableStateOf<String?>(null)
+        private set
+    var freeLastCheck by mutableStateOf(0L)
+        private set
+    private var checkJob: Job? = null
+
+    private fun applyFreeCheck() {
+        val dead = AppGraph.freeCheck.dead()
+        val alive = freeAll.filterNot { it.cmd in dead }
+        // If everything looks dead the TV was probably offline during the check: show all.
+        freeChannels = if (alive.isEmpty()) freeAll else alive
+        freeHidden = freeAll.size - freeChannels.size
+        freeLastCheck = AppGraph.freeCheck.lastCheck(freeCountry)
+    }
+
+    /** Checks every Free TV stream and hides the dead ones. Runs by itself once a month. */
+    fun checkFreeChannels() {
+        if (checkJob?.isActive == true || freeAll.isEmpty()) return
+        val code = freeCountry
+        val list = freeAll
+        checkJob = viewModelScope.launch {
+            freeChecking = "Checking channels…"
+            try {
+                AppGraph.freeCheck.check(code, list) { done, total ->
+                    viewModelScope.launch { freeChecking = "Checking $done of $total…" }
+                }
+                if (code == freeCountry) applyFreeCheck()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            } finally {
+                freeChecking = null
+            }
+        }
+    }
 
     fun loadFreeTv(force: Boolean = false) {
         if (!force && (freeChannels.isNotEmpty() || freeLoading)) return
@@ -294,12 +358,14 @@ class AppViewModel : ViewModel() {
         val code = freeCountry
         freeJob = viewModelScope.launch {
             try {
-                freeChannels = com.novabox.tv.data.FreeTv.channels(code, forceRefresh = force)
+                freeAll = com.novabox.tv.data.FreeTv.channels(code, forceRefresh = force)
+                applyFreeCheck()
                 freeGroup = null
+                if (AppGraph.freeCheck.isDue(code)) checkFreeChannels()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                freeChannels = emptyList()
+                freeChannels = emptyList(); freeAll = emptyList(); freeHidden = 0
                 freeError = e.message ?: "Couldn't load free channels"
             } finally {
                 freeLoading = false
@@ -311,7 +377,8 @@ class AppViewModel : ViewModel() {
         if (code == freeCountry && freeChannels.isNotEmpty()) return
         freeCountry = code
         AppGraph.settings.freeTvCountry = code
-        freeChannels = emptyList()
+        freeChannels = emptyList(); freeAll = emptyList(); freeHidden = 0
+        checkJob?.cancel(); freeChecking = null
         freeGroup = null
         freeLoading = false
         loadFreeTv()
@@ -481,14 +548,15 @@ class AppViewModel : ViewModel() {
     /** Unrestricts an RD link (torrent files) and opens the film player. */
     private var playJob: Job? = null
 
-    fun playDebrid(title: String, link: String, alreadyDirect: Boolean, onPlay: (PlayRequest) -> Unit) {
+    /** [releaseName] keys the saved progress, so two shows' "S01E02" don't share it. */
+    fun playDebrid(title: String, link: String, alreadyDirect: Boolean, onPlay: (PlayRequest) -> Unit, releaseName: String = title) {
         if (playJob?.isActive == true) return
         playJob = viewModelScope.launch {
             debridPlayStatus = "Getting the stream from Real-Debrid…"
             try {
                 val url = if (alreadyDirect) link else com.novabox.tv.data.RealDebrid.unrestrict(link)
                 debridPlayStatus = null
-                onPlay(PlayRequest.Vod(title, url, null, subtitle = "Real-Debrid", direct = true))
+                onPlay(debridRequest(title, url, releaseName))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -496,6 +564,34 @@ class AppViewModel : ViewModel() {
             }
         }
     }
+
+    private fun debridRequest(title: String, url: String, releaseName: String) = PlayRequest.Vod(
+        title, url, null, subtitle = "Real-Debrid", direct = true,
+        key = com.novabox.tv.data.WatchEntry.debridKey(releaseName),
+        releaseName = releaseName,
+        next = if (com.novabox.tv.data.DebridNext.isEpisode(releaseName)) ::nextDebridEpisode else null,
+    )
+
+    /**
+     * The episode after [releaseName] in the user's Real-Debrid library, ready to play: looked for
+     * in the open torrent, then the downloads list, then other torrents of the show (season packs
+     * included). Null if there isn't one.
+     */
+    suspend fun nextDebridEpisode(releaseName: String): PlayRequest.Vod? = runCatching {
+        val rd = com.novabox.tv.data.RealDebrid
+        val next = com.novabox.tv.data.DebridNext
+        debridFiles?.let { files -> next.pick(releaseName, files) { it.name } }?.let { f ->
+            return@runCatching debridRequest(rd.pretty(f.name), rd.unrestrict(f.link), f.name)
+        }
+        next.pick(releaseName, debridDownloads.filter { rd.isVideo(it.name) }) { it.name }?.let { d ->
+            return@runCatching debridRequest(rd.pretty(d.name), d.url, d.name)
+        }
+        for (t in next.holders(releaseName, debridTorrents.filter { it.status == "downloaded" }) { it.name }) {
+            val f = next.pick(releaseName, rd.torrentFiles(t.id)) { it.name } ?: continue
+            return@runCatching debridRequest(rd.pretty(f.name), rd.unrestrict(f.link), f.name)
+        }
+        null
+    }.getOrNull()
 
     // ------------------------------------------------------------- VPN app (optional)
 

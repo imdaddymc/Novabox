@@ -149,8 +149,8 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
             } else when (vm.tab) {
                 HomeTab.LIVE -> LiveScreen(vm, onPlay)
                 HomeTab.FREE_TV -> FreeTvScreen(vm, onPlay)
-                HomeTab.MOVIES -> VodScreen(vm, VodKind.MOVIE)
-                HomeTab.SERIES -> VodScreen(vm, VodKind.SERIES)
+                HomeTab.MOVIES -> VodScreen(vm, VodKind.MOVIE, onPlay)
+                HomeTab.SERIES -> VodScreen(vm, VodKind.SERIES, onPlay)
                 HomeTab.FAVORITES -> FavoritesScreen(vm, onPlay)
                 HomeTab.SEARCH -> SearchScreen(vm, onPlay)
                 HomeTab.DEBRID -> DebridScreen(vm, onPlay)

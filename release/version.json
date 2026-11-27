@@ -1,6 +1,6 @@
 {
-  "versionCode": 6,
-  "versionName": "1.3.2",
-  "notes": "Fixes a crash right after connecting to some portals (when the portal fails to send its channel categories). Portals that repeat channel IDs no longer crash the channel list.",
+  "versionCode": 7,
+  "versionName": "1.4.0",
+  "notes": "TV guide grid, Continue watching with resume, audio and subtitle picker, recent channels and Back to last channel, picture options, Debrid next-episode autoplay, Free TV HD category, backup feeds and monthly dead-stream clean-up, and STB settings per profile.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

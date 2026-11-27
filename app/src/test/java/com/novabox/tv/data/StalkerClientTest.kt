@@ -117,4 +117,23 @@ class StalkerClientTest {
         assertEquals(ch.size, ch.map { it.id }.toSet().size)
         assertTrue(runCatching { c.liveGenres() }.isFailure)
     }
+
+    /** The STB settings in the profile editor reach the portal in place of the built-in defaults. */
+    @Test fun stbSettingsAreSent() = runTest {
+        val c = StalkerClient(Profile(portalUrl = server.url("/c/").toString(), mac = "00:1a:79:12:34:56",
+            stbModel = "MAG324", firmware = "my-fw", imageVersion = "300", hwVersion = "2.0", serial = "062014N011986", userAgent = "UA/1"))
+        c.login()
+        val gp = requests.first { it.requestUrl!!.queryParameter("action") == "get_profile" }
+        val u = gp.requestUrl!!
+        assertEquals("my-fw", u.queryParameter("ver"))
+        assertEquals("300", u.queryParameter("image_version"))
+        assertEquals("2.0", u.queryParameter("hw_version"))
+        assertEquals("062014N011986", u.queryParameter("sn"))
+        assertEquals("MAG324", u.queryParameter("stb_type"))
+        assertEquals("UA/1", gp.getHeader("User-Agent"))
+        val back = Profile.fromJson(c.profile.copy(resolution = "1920x1080").toJson())
+        assertEquals("my-fw", back.firmware); assertEquals("1920x1080", back.resolution)
+        assertEquals(1920 to 1080, com.novabox.tv.player.maxVideoSize(back.resolution))
+        assertEquals(null, com.novabox.tv.player.maxVideoSize(""))
+    }
 }

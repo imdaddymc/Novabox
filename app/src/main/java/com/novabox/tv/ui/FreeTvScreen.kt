@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +43,9 @@ import com.novabox.tv.data.Channel
 import com.novabox.tv.data.FreeTv
 import com.novabox.tv.data.PlayRequest
 
+/** Free TV's "HD · 1080p and up" category. */
+private const val HD_GROUP = "__hd"
+
 /** Free TV: public broadcaster streams by country. Needs no portal profile or login. */
 @Composable
 fun FreeTvScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
@@ -50,7 +54,14 @@ fun FreeTvScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
     val country = FreeTv.country(vm.freeCountry)
     val all = vm.freeChannels
     val groups = remember(all) { all.groupingBy { it.genreId }.eachCount().toList().sortedBy { it.first.lowercase() } }
-    val list = remember(all, vm.freeGroup) { if (vm.freeGroup == null) all else all.filter { it.genreId == vm.freeGroup } }
+    val hd = remember(all) { all.filter { FreeTv.height(it) >= FreeTv.HD_MIN } }
+    val list = remember(all, vm.freeGroup) {
+        when (vm.freeGroup) {
+            null -> all
+            HD_GROUP -> hd
+            else -> all.filter { it.genreId == vm.freeGroup }
+        }
+    }
     var focused by remember { mutableStateOf<Channel?>(null) }
     val listState = rememberLazyListState()
     LaunchedEffect(vm.freeGroup, vm.freeCountry) { listState.scrollToItem(0); focused = null }
@@ -71,6 +82,7 @@ fun FreeTvScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                 SectionTitle("CATEGORIES")
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(vertical = 6.dp, horizontal = 4.dp)) {
                     item { GroupItem("All channels", all.size, vm.freeGroup == null) { vm.freeGroup = null } }
+                    if (hd.isNotEmpty()) item(key = HD_GROUP) { GroupItem("HD · 1080p and up", hd.size, vm.freeGroup == HD_GROUP) { vm.freeGroup = HD_GROUP } }
                     groups.forEach { (g, n) -> item(key = g) { GroupItem(g, n, vm.freeGroup == g) { vm.freeGroup = g } } }
                 }
             }
@@ -133,8 +145,19 @@ fun FreeTvScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                         "No login needed. Some may be offline or only play in their home country.",
                     fontSize = 13.sp, color = Palette.muted,
                 )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    vm.freeChecking ?: when {
+                        vm.freeLastCheck == 0L -> "Streams are checked once a month; dead ones are hidden."
+                        else -> "Checked " + java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault()).format(java.util.Date(vm.freeLastCheck)) +
+                            (if (vm.freeHidden > 0) " · ${vm.freeHidden} offline hidden" else " · all answering") + ". Checked again monthly."
+                    },
+                    fontSize = 13.sp, color = if (vm.freeChecking != null) Palette.teal else Palette.muted,
+                )
                 Spacer(Modifier.height(14.dp))
                 NovaButton("Refresh list", { vm.loadFreeTv(force = true) }, icon = Icons.Filled.Refresh)
+                Spacer(Modifier.height(8.dp))
+                NovaButton(if (vm.freeChecking != null) "Checking…" else "Check channels now", { vm.checkFreeChannels() }, icon = Icons.Filled.Check)
             }
         }
     }

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -138,6 +139,10 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
     val downloadCards = remember(downloads) { ShelfGroups.group(downloads, { "d" + it.id }, { it.name }) }
     /** The card whose details are in the side panel. */
     var openKey by remember { mutableStateOf<String?>(null) }
+    // OK on a show or torrent card moves focus to its first episode or file, so films or other
+    // cards in between don't have to be crossed (crossing a film swaps the panel to that film).
+    val panelFirst = remember { androidx.compose.ui.focus.FocusRequester() }
+    var jumpToPanel by remember { mutableStateOf(false) }
     /** True while the remote is in the sidebar; otherwise it shrinks to icons. */
     var sideOpen by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
@@ -219,18 +224,30 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                             DebridCard(vm, first.name, detail, selected = openKey == g.key, onClick = {
                                 openKey = g.key
                                 vm.openTorrent(g.items.firstOrNull { it.status == "downloaded" } ?: first)
+                                jumpToPanel = true
                             }, onFocus = {})
                         } else gridItems(downloadCards, key = { it.key }) { g ->
                             val first = g.items.first()
                             val detail = if (g.isShow) "${g.items.size} episode" + (if (g.items.size == 1) "" else "s") else (episodeTag(first.name) ?: RealDebrid.size(first.bytes))
                             DebridCard(vm, first.name, detail, selected = openKey == g.key, onClick = {
                                 openKey = g.key
-                                if (!g.isShow) vm.playDebrid(RealDebrid.pretty(first.name), first.url, alreadyDirect = true, onPlay)
+                                if (g.isShow) jumpToPanel = true
+                                if (!g.isShow) vm.playDebrid(RealDebrid.pretty(first.name), first.url, alreadyDirect = true, onPlay, releaseName = first.name)
                             }, onFocus = { if (!g.isShow || openKey == null) openKey = g.key })
                         }
                     }
                 }
             }
+        }
+
+        LaunchedEffect(jumpToPanel) {
+            if (!jumpToPanel) return@LaunchedEffect
+            // Give the file list up to 5 s to load, then stay on the card.
+            repeat(50) {
+                kotlinx.coroutines.delay(100)
+                if (runCatching { panelFirst.requestFocus() }.isSuccess) { jumpToPanel = false; return@LaunchedEffect }
+            }
+            jumpToPanel = false
         }
 
         // Right: seasons and files of the open torrent card, or the episodes / film of a download card
@@ -271,8 +288,8 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                             else -> {
                                 SectionTitle("VIDEO FILES · ${files.size}")
                                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(4.dp)) {
-                                    items(files, key = { it.link }) { f ->
-                                        PlayRow(episodeTag(f.name) ?: RealDebrid.pretty(f.name), RealDebrid.size(f.bytes)) { vm.playDebrid(RealDebrid.pretty(f.name), f.link, alreadyDirect = false, onPlay) }
+                                    itemsIndexed(files, key = { _, f -> f.link }) { i, f ->
+                                        PlayRow(episodeTag(f.name) ?: RealDebrid.pretty(f.name), RealDebrid.size(f.bytes), if (i == 0) Modifier.focusRequester(panelFirst) else Modifier) { vm.playDebrid(RealDebrid.pretty(f.name), f.link, alreadyDirect = false, onPlay, releaseName = f.name) }
                                     }
                                 }
                             }
@@ -287,9 +304,9 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                         Spacer(Modifier.height(12.dp))
                         SectionTitle("EPISODES · ${g.items.size}")
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(4.dp)) {
-                            items(g.items, key = { it.id }) { d ->
-                                PlayRow(episodeTag(d.name) ?: RealDebrid.pretty(d.name), RealDebrid.size(d.bytes) + " · added " + d.generated.take(10)) {
-                                    vm.playDebrid(RealDebrid.pretty(d.name), d.url, alreadyDirect = true, onPlay)
+                            itemsIndexed(g.items, key = { _, d -> d.id }) { i, d ->
+                                PlayRow(episodeTag(d.name) ?: RealDebrid.pretty(d.name), RealDebrid.size(d.bytes) + " · added " + d.generated.take(10), if (i == 0) Modifier.focusRequester(panelFirst) else Modifier) {
+                                    vm.playDebrid(RealDebrid.pretty(d.name), d.url, alreadyDirect = true, onPlay, releaseName = d.name)
                                 }
                             }
                         }
@@ -298,7 +315,7 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                         DetailHeader(vm, d.name)
                         Text(RealDebrid.size(d.bytes) + " · added " + d.generated.take(10), fontSize = 13.sp, color = Palette.muted, modifier = Modifier.padding(top = 8.dp))
                         Spacer(Modifier.height(16.dp))
-                        NovaButton("Play", { vm.playDebrid(RealDebrid.pretty(d.name), d.url, alreadyDirect = true, onPlay) }, icon = Icons.Filled.PlayArrow, primary = true)
+                        NovaButton("Play", { vm.playDebrid(RealDebrid.pretty(d.name), d.url, alreadyDirect = true, onPlay, releaseName = d.name) }, icon = Icons.Filled.PlayArrow, primary = true)
                     }
                 }
             }
@@ -307,8 +324,8 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
 }
 
 @Composable
-private fun PlayRow(title: String, detail: String, onClick: () -> Unit) {
-    FocusSurface(onClick = onClick, focusedScale = 1.02f, modifier = Modifier.fillMaxWidth()) { foc ->
+private fun PlayRow(title: String, detail: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    FocusSurface(onClick = onClick, focusedScale = 1.02f, modifier = modifier.fillMaxWidth()) { foc ->
         Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
             Spacer(Modifier.width(10.dp))

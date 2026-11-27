@@ -9,16 +9,25 @@ the red, green, yellow or blue buttons.
 
 ## Features
 
-- Several portal profiles: portal URL, MAC address, STB model (MAG250 to MAG520),
-  serial, device IDs, signature, optional portal login/password, time zone, custom user agent
+- Several portal profiles, each with its own **STB settings** laid out like a MAG box: STB model (MAG250 to
+  MAG520), firmware, image and hardware version, user agent, screen resolution, MAC address, serial number,
+  device IDs and signature. Empty fields show the value NovaBox will use. Plus optional portal login/password and time zone
 - Live TV with categories, channel logos and a programme guide (now/next with progress)
+- **TV guide**: a grid of channels against time (Live TV → TV guide). Move through the next hours and press OK to watch
+- **Recent channels** category, and **Back to …** in the live menu (or the remote's last-channel key) to jump to the previous channel
+- **Continue watching**: films and episodes pick up where you stopped. Watched episodes get a ✓ and the show offers the next one
+- **Audio and Subtitles** buttons in the player; the language you pick is remembered for the next videos
+- **Picture** settings: always play the best quality, match the TV's frame rate to the film, HDR output, and an optional light sharpen filter
 - Films and series by category, with posters, details, seasons and episodes
 - Favourites for channels, films and series, saved on the device for each profile
 - Search across channels, films and series
 - Account info from the portal (expiry date, plan)
 - Network check (Settings → Run network check, or from the "Couldn't connect" screen): tests the TV's connection, internet access and speed, the portal's address, server and login, and a live stream, then says what to fix
 - **Free TV**: channels that broadcasters stream free to the public, by country (from the
-  community list at iptv-org). No portal, profile or login needed; works even with no profiles set up
+  community list at iptv-org). No portal, profile or login needed; works even with no profiles set up.
+  An **HD · 1080p and up** category, the sharpest feed of each channel first, and if a feed fails NovaBox
+  tries the channel's other feeds. Once a month it checks every stream and hides the ones that are offline
+  (Info panel → Check channels now runs it any time); new channels arrive whenever the list refreshes
 - **Check for updates** (Settings → App updates): downloads the newest NovaBox from this repository and
   installs it over the current one. Profiles, favourites and settings are kept
 - **Automatic updates** (Settings → App updates → Automatic updates: On): checks once a day, downloads new
@@ -28,7 +37,8 @@ the red, green, yellow or blue buttons.
   Real-Debrid account. Link it with a code shown on the TV (no password typed), then browse and search your RD
   torrents and downloads as poster cards (posters from IMDb's public search, no key needed) and play them in the
   film player. Seasons and episodes of the same show share one card. It only shows what is already in your
-  account; it doesn't search torrent sites
+  account; it doesn't search torrent sites. When an episode ends, the next one in your account starts after a
+  10-second "Up next" (press Cancel to stop)
 - **VPN app** (Settings → VPN app, with developer tools unlocked): pick the VPN app you use, like Surfshark, and
   NovaBox opens it with one press from Settings or the Debrid sidebar so you can check it's connected. NovaBox
   shows whether a VPN is on but never requires one
@@ -48,6 +58,11 @@ the red, green, yellow or blue buttons.
 | ![Download episodes](docs/screenshots/15-debrid-download-episodes.png) Downloads: a show's episodes on one card | ![Automatic updates](docs/screenshots/16-automatic-updates.png) Settings → Automatic updates |
 | ![Update ready](docs/screenshots/17-update-ready.png) When Android needs a press, NovaBox asks on open | ![Sidebar as icons](docs/screenshots/18-debrid-sidebar-icons.png) Debrid sidebar shrinks to icons while you browse |
 | ![Sidebar open](docs/screenshots/19-debrid-sidebar-open.png) Press Left and it opens again | ![VPN app](docs/screenshots/20-vpn-app.png) Settings → VPN app (shown with a test VPN app) |
+| ![TV guide](docs/screenshots/21-tv-guide.png) TV guide grid | ![Continue watching](docs/screenshots/22-continue-watching.png) Continue watching |
+| ![Resume](docs/screenshots/23-resume-film.png) Films resume where you stopped | ![Series](docs/screenshots/24-series-watched-next.png) Watched episodes and "Next" |
+| ![Subtitles](docs/screenshots/25-subtitles-picker.png) Subtitles picker | ![Back to channel](docs/screenshots/26-back-to-last-channel.png) Back to the last channel |
+| ![Up next](docs/screenshots/27-debrid-up-next.png) Debrid: Up next | ![Free TV HD](docs/screenshots/28-free-tv-hd-check.png) Free TV: HD category and the monthly check |
+| ![Picture](docs/screenshots/29-picture-settings.png) Settings → Picture | ![STB settings](docs/screenshots/30-stb-settings.png) STB settings in a profile |
 
 ## Using Surfshark with NovaBox
 

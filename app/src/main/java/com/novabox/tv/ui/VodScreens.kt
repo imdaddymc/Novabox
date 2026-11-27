@@ -107,14 +107,39 @@ internal fun continueFor(entries: Collection<WatchEntry>, kind: VodKind): List<W
         .sortedByDescending { it.updatedAt }
         .distinctBy { it.item?.id }
 
-fun WatchEntry.toRequest(startAtMs: Long? = null) =
-    PlayRequest.Vod(title, cmd, episode, subtitle, direct, key = key, poster = poster, item = item, startAtMs = startAtMs)
+fun WatchEntry.toRequest(startAtMs: Long? = null): PlayRequest.Vod {
+    // A portal episode ("e:item:season:episode") keeps autoplaying into the next one when resumed.
+    val next = item?.takeIf { key.startsWith("e:") && episode != null }?.let { i ->
+        portalNext(i, key.removePrefix("e:${i.id}:").substringBeforeLast(':'), episode!!)
+    }
+    return PlayRequest.Vod(title, cmd, episode, subtitle, direct, key = key, poster = poster, item = item, startAtMs = startAtMs, next = next)
+}
+
+/** Seasons already fetched this session, so the next-episode lookup doesn't ask the portal again. */
+private val seasonCache = java.util.concurrent.ConcurrentHashMap<String, List<Season>>()
+
+/** Finds the episode after [ep] of [seasonId] (or the next season's first) once the current one nears its end. */
+fun portalNext(item: VodItem, seasonId: String, ep: Int): suspend (String) -> PlayRequest.Vod? = { _ ->
+    val seasons = seasonCache[item.id] ?: AppGraph.client?.seasons(item)?.also { if (it.isNotEmpty()) seasonCache[item.id] = it }.orEmpty()
+    val si = seasons.indexOfFirst { it.id == seasonId }
+    val s = seasons.getOrNull(si)
+    val ei = s?.episodes?.indexOf(ep) ?: -1
+    when {
+        s == null -> null
+        ei >= 0 && ei + 1 < s.episodes.size -> episodeRequest(item, s, s.episodes[ei + 1])
+        else -> seasons.getOrNull(si + 1)?.let { n -> n.episodes.firstOrNull()?.let { episodeRequest(item, n, it) } }
+    }
+}
+
+/** Remembers seasons shown on a details page for [portalNext]. */
+fun rememberSeasons(item: VodItem, seasons: List<Season>) { if (seasons.isNotEmpty()) seasonCache[item.id] = seasons }
 
 fun filmRequest(item: VodItem, startAtMs: Long? = null) =
     PlayRequest.Vod(item.name, item.cmd, null, key = WatchEntry.filmKey(item), poster = item.poster, item = item, startAtMs = startAtMs)
 
 fun episodeRequest(item: VodItem, season: Season, ep: Int, startAtMs: Long? = null) =
-    PlayRequest.Vod(item.name, season.cmdFor(ep), ep, "${season.name} · Episode $ep", key = WatchEntry.episodeKey(item, season, ep), poster = item.poster, item = item, startAtMs = startAtMs)
+    PlayRequest.Vod(item.name, season.cmdFor(ep), ep, "${season.name} · Episode $ep", key = WatchEntry.episodeKey(item, season, ep), poster = item.poster, item = item, startAtMs = startAtMs,
+        next = portalNext(item, season.id, ep))
 
 /** "12 min left", "1 h 5 min left". */
 internal fun timeLeft(e: WatchEntry): String {
@@ -202,6 +227,7 @@ fun DetailsScreen(vm: AppViewModel, item: VodItem, onPlay: (PlayRequest) -> Unit
     val watch by AppGraph.watch.entries.collectAsState()
     val film = if (item.kind == VodKind.MOVIE) watch[WatchEntry.filmKey(item)] else null
     val next = if (item.kind == VodKind.SERIES) remember(watch, vm.seasons) { nextEpisode(watch.values, item, vm.seasons) } else null
+    LaunchedEffect(vm.seasons) { rememberSeasons(item, vm.seasons) }
     val playFocus = remember { FocusRequester() }
     var seasonIdx by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { runCatching { playFocus.requestFocus() } }

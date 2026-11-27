@@ -1,5 +1,10 @@
 package com.novabox.tv.player
 
+import androidx.compose.foundation.layout.size
+import androidx.tv.material3.Icon
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.alpha
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -142,6 +147,36 @@ private val RestartIcon = materialIcon(name = "Restart") {
         moveTo(12f, 5f); verticalLineTo(1f); lineTo(7f, 6f); lineTo(12f, 11f); verticalLineTo(7f)
         curveTo(15.31f, 7f, 18f, 9.69f, 18f, 13f); reflectiveCurveTo(15.31f, 19f, 12f, 19f); reflectiveCurveTo(6f, 16.31f, 6f, 13f)
         horizontalLineTo(4f); curveTo(4f, 17.42f, 7.58f, 21f, 12f, 21f); reflectiveCurveTo(20f, 17.42f, 20f, 13f); reflectiveCurveTo(16.42f, 5f, 12f, 5f); close()
+    }
+}
+
+/** A round icon button for the player controls. Its name shows underneath while it has focus. */
+@Composable
+private fun PlayerIconButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = false, icon: @Composable () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp)) {
+        FocusSurface(
+            onClick = onClick,
+            modifier = modifier.size(if (primary) 64.dp else 56.dp).onFocusChanged { focused = it.isFocused },
+            shape = androidx.compose.foundation.shape.CircleShape,
+            container = if (primary) Palette.accent else Palette.card,
+            focusedScale = 1.1f,
+        ) { _ ->
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { icon() }
+        }
+        Text(
+            label, fontSize = 12.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 14.sp,
+            color = Color.White, modifier = Modifier.padding(top = 6.dp).height(30.dp).alpha(if (focused) 1f else 0f),
+        )
+    }
+}
+
+/** A circular arrow with the number of seconds inside: back (anticlockwise) or forward. */
+@Composable
+private fun SkipIcon(back: Boolean, seconds: Int) {
+    Box(contentAlignment = Alignment.Center) {
+        Icon(RestartIcon, null, Modifier.size(34.dp).graphicsLayer { if (!back) scaleX = -1f })
+        Text("$seconds", fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 3.dp))
     }
 }
 
@@ -583,14 +618,16 @@ class PlayerActivity : ComponentActivity() {
             }
             Spacer(Modifier.height(18.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = RowGap, verticalAlignment = Alignment.CenterVertically) {
-                NovaButton("10s", onBack10, icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft)
-                NovaButton(if (playing) "Pause" else "Play", onToggle, Modifier.focusRequester(first),
-                    icon = if (playing) PauseIcon else Icons.Filled.PlayArrow, primary = true)
-                NovaButton("30s", onFwd30, icon = Icons.AutoMirrored.Filled.KeyboardArrowRight)
-                if (resumedAt > 0) NovaButton("Start over", onStartOver, icon = RestartIcon)
-                NovaButton("Audio", { onTracks(C.TRACK_TYPE_AUDIO) }, icon = AudioIcon)
-                NovaButton("Subtitles", { onTracks(C.TRACK_TYPE_TEXT) }, icon = SubtitlesIcon)
-                NovaButton("Exit player", onExit, icon = Icons.AutoMirrored.Filled.ArrowBack)
+                // Icon buttons, like a TV remote's transport keys; the focused one shows its name underneath.
+                PlayerIconButton("Back 10 seconds", onBack10) { SkipIcon(back = true, seconds = 10) }
+                PlayerIconButton(if (playing) "Pause" else "Play", onToggle, Modifier.focusRequester(first), primary = true) {
+                    Icon(if (playing) PauseIcon else Icons.Filled.PlayArrow, null, Modifier.size(30.dp))
+                }
+                PlayerIconButton("Forward 30 seconds", onFwd30) { SkipIcon(back = false, seconds = 30) }
+                if (resumedAt > 0) PlayerIconButton("Start over", onStartOver) { Icon(RestartIcon, null, Modifier.size(26.dp)) }
+                PlayerIconButton("Audio", { onTracks(C.TRACK_TYPE_AUDIO) }) { Icon(AudioIcon, null, Modifier.size(26.dp)) }
+                PlayerIconButton("Subtitles", { onTracks(C.TRACK_TYPE_TEXT) }) { Icon(SubtitlesIcon, null, Modifier.size(26.dp)) }
+                PlayerIconButton("Exit player", onExit) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(26.dp)) }
             }
         }
     }

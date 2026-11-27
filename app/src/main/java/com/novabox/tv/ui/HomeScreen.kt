@@ -16,12 +16,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
@@ -53,13 +58,13 @@ import java.util.Date
 import java.util.Locale
 
 private fun HomeTab.icon(): ImageVector = when (this) {
-    HomeTab.LIVE -> Icons.Filled.PlayArrow
-    HomeTab.FREE_TV -> Icons.Filled.Place
-    HomeTab.MOVIES -> Icons.Filled.DateRange
-    HomeTab.SERIES -> Icons.AutoMirrored.Filled.List
+    HomeTab.LIVE -> Icons.Filled.LiveTv
+    HomeTab.FREE_TV -> Icons.Filled.Tv
+    HomeTab.MOVIES -> Icons.Filled.Movie
+    HomeTab.SERIES -> Icons.Filled.VideoLibrary
     HomeTab.FAVORITES -> Icons.Filled.Favorite
     HomeTab.SEARCH -> Icons.Filled.Search
-    HomeTab.DEBRID -> Icons.Filled.Build
+    HomeTab.DEBRID -> Icons.Filled.CloudDownload
     HomeTab.SETTINGS -> Icons.Filled.Settings
 }
 
@@ -114,7 +119,7 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
                     }
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 vm.visibleTabs.forEach { t ->
                     FocusSurface(
@@ -125,15 +130,17 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
                         focusedScale = 1.08f,
                         container = androidx.compose.ui.graphics.Color.Transparent,
                         modifier = Modifier.focusRequester(tabFocus.getValue(t)),
-                    ) { _ ->
-                        // Search, Debrid and Settings show just their icon unless open, so all the tabs
-                        // and the clock fit on a 1080p screen.
-                        val compact = t in setOf(HomeTab.SEARCH, HomeTab.DEBRID, HomeTab.SETTINGS) && vm.tab != t
-                        Row(Modifier.padding(horizontal = if (compact) 10.dp else 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(t.icon(), t.label, Modifier.size(17.dp))
-                            if (!compact) {
-                                Spacer(Modifier.width(6.dp))
-                                Text(t.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                    ) { focused ->
+                        // Every tab is just its icon. The tab under the remote's focus slides open
+                        // to show its name, so the whole bar always fits on screen.
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(t.icon(), t.label, Modifier.size(22.dp))
+                            AnimatedVisibility(
+                                visible = focused,
+                                enter = expandHorizontally(expandFrom = Alignment.Start) + fadeIn(),
+                                exit = shrinkHorizontally(shrinkTowards = Alignment.Start) + fadeOut(),
+                            ) {
+                                Text(t.label, Modifier.padding(start = 8.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                             }
                         }
                     }

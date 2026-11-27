@@ -15,7 +15,8 @@ the red, green, yellow or blue buttons.
 - Live TV with categories, channel logos and a programme guide (now/next with progress)
 - **TV guide**: a grid of channels against time (Live TV → TV guide). Move through the next hours and press OK to watch
 - **Recent channels** category, and **Back to …** in the live menu (or the remote's last-channel key) to jump to the previous channel
-- **Continue watching**: films and episodes pick up where you stopped. Watched episodes get a ✓ and the show offers the next one
+- **Continue watching**: films and episodes pick up where you stopped (saved on the TV, no extra data). Watched episodes get a ✓ and the show offers the next one
+- **Autoplay**: when a portal episode ends, the next one (or the next season's first) starts after a 10-second "Up next". Press Cancel to stop
 - **Audio and Subtitles** buttons in the player; the language you pick is remembered for the next videos
 - **Picture** settings: always play the best quality, match the TV's frame rate to the film, HDR output, and an optional light sharpen filter
 - Films and series by category, with posters, details, seasons and episodes. Shows a portal files under Movies are moved to the Series tab
@@ -36,7 +37,7 @@ the red, green, yellow or blue buttons.
 - **Automatic updates** (Settings → App updates → Automatic updates: On): checks once a day, downloads new
   versions in the background and installs them when the TV next starts up. If Android needs a confirm press
   (the first self-update after installing with Downloader), NovaBox asks the next time you open it
-- **Developer tools** (Settings → Developer tools → Unlock): adds a **Debrid** tab (wrench icon) for your own
+- **Developer tools** (Settings → Developer tools → Unlock): adds a **Debrid** tab (cloud icon) for your own
   Real-Debrid account. Link it with a code shown on the TV (no password typed), then browse and search your RD
   torrents and downloads as poster cards (posters from IMDb's public search, no key needed) and play them in the
   film player. Seasons and episodes of the same show share one card. It only shows what is already in your
@@ -66,6 +67,8 @@ the red, green, yellow or blue buttons.
 | ![Subtitles](docs/screenshots/25-subtitles-picker.png) Subtitles picker | ![Back to channel](docs/screenshots/26-back-to-last-channel.png) Back to the last channel |
 | ![Up next](docs/screenshots/27-debrid-up-next.png) Debrid: Up next | ![Free TV HD](docs/screenshots/28-free-tv-hd-check.png) Free TV: HD category and the monthly check |
 | ![Picture](docs/screenshots/29-picture-settings.png) Settings → Picture | ![STB settings](docs/screenshots/30-stb-settings.png) STB settings in a profile |
+| ![Icon tabs](docs/screenshots/31-icon-tabs.png) Icon tabs: the one you are on shows its name | ![Player](docs/screenshots/32-player-icons.png) Player buttons as icons |
+| ![Continue an episode](docs/screenshots/33-continue-episode.png) Continue watching picks up the episode | |
 
 ## Using Surfshark with NovaBox
 
@@ -85,12 +88,12 @@ If Real-Debrid refuses a link while the VPN is on, try a different Surfshark loc
 
 | Where | How |
 |---|---|
-| Top tab bar | Live TV · Free TV · Movies · Series · Favourites · Search · (Debrid) · Settings. Move with ◀ ▶, then ▼ into the page |
-| Add a favourite | The ☆ button next to each channel, the **Favourite** button on a channel's panel, a film's or series' page, or in the player menu |
+| Top tab bar | Icons for Live TV · Free TV · Movies · Series · Favourites · Search · (Debrid) · Settings. The tab you move onto opens up to show its name. Move with ◀ ▶, then ▼ into the page |
+| Add a favourite | The ♥ button next to each channel, the **Favourite** button on a channel's panel, a film's or series' page, or in the player menu |
 | Search | Choose the **Search** tab, press OK on the search box and type with the on-screen keyboard |
 | Back | Inside a page, jumps back to the tab bar. On the tab bar, exits the app |
 | Live player | ▲ ▼ change channel · ◀ channel list · OK menu (Favourite, Channel list, Previous, Next, Exit) · Back closes the menu or the player |
-| Film player | OK shows the controls (back 10s, play/pause, forward 30s, exit) · ◀ ▶ skip back 10s / forward 30s · Back hides the controls, then closes the player |
+| Film player | OK shows the icon controls (back 10s, play/pause, forward 30s, start over, audio, subtitles, exit; the focused one shows its name) · ◀ ▶ skip back 10s / forward 30s · Back hides the controls, then closes the player |
 
 ## Install on Google TV (sideload)
 

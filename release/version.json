@@ -1,6 +1,6 @@
 {
-  "versionCode": 9,
-  "versionName": "1.4.2",
-  "notes": "Episodes now load for shows on portals that list each episode's video file separately (Ministra 5), including long seasons. The details page keeps the title on screen, and ratings of 0 are hidden.",
+  "versionCode": 10,
+  "versionName": "1.4.3",
+  "notes": "The top tabs are now icons, and the one you move onto opens up to show its name. Player buttons are icons too. Portal shows play the next episode by themselves after a 10-second Up next, and episodes pick up where you stopped.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

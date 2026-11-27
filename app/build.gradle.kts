@@ -13,8 +13,8 @@ android {
         applicationId = "com.novabox.tv"
         minSdk = 23
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.4.5"
+        versionCode = 13
+        versionName = "1.4.6"
     }
 
     // Every NovaBox build must be signed with the same key, or Android refuses to
@@ -73,6 +73,7 @@ dependencies {
     implementation("androidx.tv:tv-material:1.0.0")
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.5.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("androidx.media3:media3-effect:1.5.1")

@@ -274,10 +274,14 @@ class PlayerActivity : ComponentActivity() {
     /** Bumped on every new stream so the resolution tag shows once per stream. */
     private var streamSerial by mutableIntStateOf(0)
 
-    private fun play(url: String) {
+    /** [forceHls]: treat the stream as HLS even when its address doesn't end in .m3u8. */
+    private fun play(url: String, forceHls: Boolean = false) {
         streamSerial++
         val item = MediaItem.Builder().setUri(url).apply {
-            if (url.contains(".m3u8", ignoreCase = true)) setMimeType(MimeTypes.APPLICATION_M3U8)
+            when {
+                forceHls || url.contains(".m3u8", ignoreCase = true) -> setMimeType(MimeTypes.APPLICATION_M3U8)
+                url.contains(".mpd", ignoreCase = true) -> setMimeType(MimeTypes.APPLICATION_MPD)
+            }
         }.build()
         player.setMediaItem(item)
         player.prepare()
@@ -364,13 +368,20 @@ class PlayerActivity : ComponentActivity() {
 
     @Composable
     private fun usePlayerError(onError: (String) -> Unit) {
+        // The listener lives for the whole screen, so it must call the latest handler: an old one
+        // would still point at the first channel watched.
+        val handler by androidx.compose.runtime.rememberUpdatedState(onError)
         DisposableEffect(Unit) {
             val l = object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     // Handled in onCreate: playback restarts without the sharpen filter.
                     if (error.errorCode == PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSOR_INIT_FAILED ||
                         error.errorCode == PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED) return
-                    onError(error.errorCodeName)
+                    // A live stream that fell behind (slow network) just jumps back to live; not a failure.
+                    if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                        player.seekToDefaultPosition(); player.prepare(); return
+                    }
+                    handler(error.errorCodeName)
                 }
             }
             player.addListener(l)
@@ -725,6 +736,8 @@ class PlayerActivity : ComponentActivity() {
         val rootFocus = remember { FocusRequester() }
         val channel = channels.getOrNull(index)
         var retries by remember { mutableIntStateOf(0) }
+        // Set (to the reason) when three tries failed: the viewer is asked whether to try again.
+        var stuck by remember { mutableStateOf<String?>(null) }
         // Free TV lists the same channel more than once (other feeds or qualities); when one feed
         // fails, the next one is tried before giving up.
         val triedFeeds = remember { mutableSetOf<String>() }
@@ -733,6 +746,7 @@ class PlayerActivity : ComponentActivity() {
             val c = channel ?: return@LaunchedEffect
             status = "Tuning…"
             retries = 0
+            stuck = null
             epg = emptyList()
             showBanner = true
             bannerUntil = System.currentTimeMillis() + 5000
@@ -762,32 +776,41 @@ class PlayerActivity : ComponentActivity() {
         LaunchedEffect(showMenu, showList, panel) {
             if (!showMenu && !showList && panel == null) runCatching { rootFocus.requestFocus() }
         }
-        usePlayerError { code ->
-            val backup = channel?.takeIf { req.direct }?.let { c ->
-                channels.firstOrNull { it.name.equals(c.name, ignoreCase = true) && it.cmd !in triedFeeds }
+        // Waits for the stream to start, then clears the message; a steady stream earns fresh retries.
+        fun watchStart() {
+            scope.launch {
+                repeat(60) { delay(500); if (player.isPlaying) { status = null; delay(30_000); if (player.isPlaying) retries = 0; return@launch } }
             }
+        }
+        fun retune(c: Channel, forceHls: Boolean = false) {
+            scope.launch {
+                if (req.direct) play(c.cmd, forceHls)
+                else runCatching { AppGraph.client?.liveLink(c) }.getOrNull()?.let { play(it) }
+                watchStart()
+            }
+        }
+        usePlayerError { code ->
+            val c = channel ?: return@usePlayerError
+            // Free TV: another feed of the same channel is tried first.
+            val backup = channels.takeIf { req.direct }?.firstOrNull { it.name.equals(c.name, ignoreCase = true) && it.cmd !in triedFeeds }
             if (backup != null) {
                 triedFeeds += backup.cmd
                 status = "This feed isn't working. Trying another feed for ${backup.name}…"
                 play(backup.cmd)
-                scope.launch {
-                    repeat(40) { delay(500); if (player.isPlaying) { status = null; return@launch } }
-                }
+                watchStart()
                 return@usePlayerError
             }
-            if (retries >= (if (req.direct) 1 else 3)) {
-                status = "This channel isn't playing right now: ${streamProblem(code)}. Press ▲ or ▼ for another channel."
+            // Three tries, then the viewer decides whether to keep trying.
+            if (retries >= MAX_RETRIES) {
+                status = null
+                stuck = streamProblem(code)
                 return@usePlayerError
             }
             retries++
-            status = "The stream stopped. Trying again…"
-            scope.launch {
-                delay(1500)
-                channel?.let { c ->
-                    if (req.direct) { play(c.cmd); status = null }
-                    else runCatching { AppGraph.client?.liveLink(c) }.getOrNull()?.let { play(it); status = null }
-                }
-            }
+            status = "This stream isn't loading. Trying again ($retries of $MAX_RETRIES)…"
+            // Some streams are HLS behind an address without .m3u8; the second try says so explicitly.
+            val hls = req.direct && ("UNRECOGNIZED" in code || "PARSING" in code)
+            scope.launch { delay(2000); if (channel?.id == c.id) retune(c, forceHls = hls) }
         }
 
         fun zap(delta: Int) {
@@ -848,12 +871,40 @@ class PlayerActivity : ComponentActivity() {
             }
             TrackPanelHost(panel, Modifier.align(Alignment.CenterEnd)) { panel = null; showMenu = false }
 
+            stuck?.let { why ->
+                StreamStuck(channel?.name.orEmpty(), why, Modifier.align(Alignment.Center),
+                    onRetry = {
+                        stuck = null; retries = 0
+                        channel?.let { c -> triedFeeds.clear(); triedFeeds += c.cmd; status = "Trying ${c.name} again…"; retune(c) }
+                    },
+                    onExit = { finish() })
+            }
+
             AnimatedVisibility(
                 showList,
                 enter = slideInHorizontally { -it } + fadeIn(), exit = slideOutHorizontally { -it } + fadeOut(),
                 modifier = Modifier.align(Alignment.CenterStart),
             ) {
                 ChannelDrawer(channels, index, favs.map { it.id }.toSet(), onClose = { showList = false }) { i -> index = i; showList = false }
+            }
+        }
+    }
+
+    /** After three failed tries: try again, or leave. ▲ ▼ still change channel. */
+    @Composable
+    private fun StreamStuck(name: String, why: String, modifier: Modifier, onRetry: () -> Unit, onExit: () -> Unit) {
+        val first = remember { FocusRequester() }
+        LaunchedEffect(Unit) { delay(60); runCatching { first.requestFocus() } }
+        Column(
+            modifier.width(560.dp).background(Color(0xF00A0E18), androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).padding(26.dp),
+        ) {
+            Text("${name.ifBlank { "This channel" }} isn't loading", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Text("It didn't start after $MAX_RETRIES tries: $why. Try loading it again, or press ▲ ▼ for another channel.", fontSize = 15.sp, color = Palette.muted)
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = RowGap) {
+                NovaButton("Try again", onRetry, Modifier.focusRequester(first), icon = RestartIcon, primary = true)
+                NovaButton("Close player", onExit)
             }
         }
     }
@@ -959,6 +1010,9 @@ internal fun resolutionLabel(width: Int, height: Int): String {
 }
 
 /** Plain words for a Media3 error code name, for the on-screen message. */
+/** Automatic tries before the viewer is asked whether to keep trying. */
+private const val MAX_RETRIES = 3
+
 internal fun streamProblem(code: String): String = when {
     "BAD_HTTP_STATUS" in code || "FILE_NOT_FOUND" in code -> "the stream is offline"
     "NETWORK" in code || "TIMEOUT" in code -> "it couldn't be reached"

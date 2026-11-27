@@ -1,6 +1,6 @@
 {
-  "versionCode": 12,
-  "versionName": "1.4.5",
-  "notes": "Fixes from a debugging pass: long daily shows now list every episode (some have over 700), and long seasons open near the newest or last-watched episode. Back while scrubbing cancels the jump. A half-watched film's buttons now all fit on screen.",
+  "versionCode": 13,
+  "versionName": "1.4.6",
+  "notes": "Free TV and live channels: a stream that won't load is tried 3 times, then you're asked whether to try again. Fixed retries going to the wrong channel after switching channels. Live streams that fall behind jump back to live, and more stream types play.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

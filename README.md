@@ -96,6 +96,7 @@ If Real-Debrid refuses a link while the VPN is on, try a different Surfshark loc
 | Search | Choose the **Search** tab, press OK on the search box and type with the on-screen keyboard |
 | Back | Inside a page, jumps back to the tab bar. On the tab bar, exits the app |
 | Live player | ▲ ▼ change channel · ◀ channel list · OK menu (Favourite, Channel list, Previous, Next, Exit) · Back closes the menu or the player |
+| A stream won't load | NovaBox tries 3 times (other feeds of the same Free TV channel first), then asks: **Try again** or **Close player**. ▲ ▼ still change channel |
 | Film player | OK shows the icon controls (back 10s, play/pause, forward 30s, start over, audio, subtitles, and exit on the far right; the focused one shows its name) · ◀ ▶ skip back 10s / forward 30s · ▲ from the buttons reaches the progress bar: ◀ ▶ scrub (hold to go faster), the time you'll jump to shows above the bar, OK jumps there (or it jumps when you stop), Back cancels · Back hides the controls, then closes the player |
 
 ## Install on Google TV (sideload)

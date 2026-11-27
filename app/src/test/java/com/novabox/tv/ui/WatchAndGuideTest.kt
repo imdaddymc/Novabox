@@ -77,4 +77,14 @@ class WatchAndGuideTest {
         val back = WatchEntry.fromJson(ep(s1, 1, 30 * min, false, 1).toJson())
         assertEquals(ep(s1, 1, 30 * min, false, 1), back)
     }
+
+    @Test fun episodeLengthPrefersPortalThenPlayedThenShow() {
+        val played = WatchEntry("e:1:2:3", "Show", "", "", "", 3, false, 10 * min, 44 * min + 40_000, 0, false, null)
+        assertEquals("42 min", episodeLength(42, played, "60 min"))
+        assertEquals("45 min", episodeLength(null, played, "60 min"))
+        assertEquals("~60 min", episodeLength(null, null, "60 min"))
+        assertNull(episodeLength(null, null, ""))
+        assertEquals("1 h 5 min", formatMinutes(65))
+        assertEquals("2 h", formatMinutes(120))
+    }
 }

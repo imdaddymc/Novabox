@@ -382,14 +382,15 @@ class StalkerClient(val profile: Profile) {
             val name = number?.let { "Season $it" } ?: o.optString("name").ifBlank { "Season ${i + 1}" }
             val listed = o.optJSONArray("series")?.let { s -> (0 until s.length()).map { s.optInt(it) } }.orEmpty().filter { it > 0 }
             if (listed.isNotEmpty()) return@mapIndexedNotNull Season(sid, name, o.optString("cmd"), listed)
-            val eps = runCatching { episodesOf(type, item, sid) }.getOrDefault(emptyList())
+            val minutes = mutableMapOf<Int, Int>()
+            val eps = runCatching { episodesOf(type, item, sid, minutes) }.getOrDefault(emptyList())
             if (eps.isEmpty()) null
-            else Season(sid, name, o.optString("cmd"), eps.map { it.first }, eps.associate { it.first to it.second })
+            else Season(sid, name, o.optString("cmd"), eps.map { it.first }, eps.associate { it.first to it.second }, minutes.toMap())
         }
     }
 
     /** Episodes listed one by one under a season: (episode number, play command). */
-    private suspend fun episodesOf(type: String, item: VodItem, seasonId: String): List<Pair<Int, String>> {
+    private suspend fun episodesOf(type: String, item: VodItem, seasonId: String, minutes: MutableMap<Int, Int> = mutableMapOf()): List<Pair<Int, String>> {
         val out = mutableListOf<Pair<Int, String>>()
         var page = 1
         // Portals send 14 episodes a page; long-running dramas need several pages.
@@ -412,12 +413,30 @@ class StalkerClient(val profile: Profile) {
                 val n = o.optString("series_number").toIntOrNull()
                     ?: Regex("""\d+""").findAll(o.optString("name")).lastOrNull()?.value?.toIntOrNull() ?: (out.size + 1)
                 out += n to cmd
+                runtimeMinutes(o)?.let { minutes[n] = it }
             }
             val total = js.optString("total_items").toIntOrNull() ?: 0
             if (out.size >= total) break
             page++
         }
         return out.distinctBy { it.first }.sortedBy { it.first }
+    }
+
+    /** An episode's length from whichever field the portal uses: minutes, seconds or "h:mm:ss". */
+    private fun runtimeMinutes(o: JSONObject): Int? {
+        for (k in listOf("time", "duration", "length", "runtime")) {
+            val v = o.optString(k).trim()
+            if (v.isEmpty() || v == "null" || v == "0") continue
+            val parts = v.split(':').mapNotNull { it.trim().toIntOrNull() }
+            val min = when {
+                parts.size == 3 -> parts[0] * 60 + parts[1] + if (parts[2] >= 30) 1 else 0
+                // "45:12" is minutes and seconds; "1:05" is hours and minutes.
+                parts.size == 2 -> if (parts[0] >= 10) parts[0] + if (parts[1] >= 30) 1 else 0 else parts[0] * 60 + parts[1]
+                else -> Regex("""\d+""").find(v)?.value?.toIntOrNull()?.let { if (it > 600) (it + 30) / 60 else it }
+            }
+            if (min != null && min in 1..600) return min
+        }
+        return null
     }
 
     /** The play command of an episode whose files are listed separately: the best-quality video file. */

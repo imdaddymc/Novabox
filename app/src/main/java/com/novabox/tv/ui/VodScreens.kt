@@ -141,6 +141,18 @@ fun episodeRequest(item: VodItem, season: Season, ep: Int, startAtMs: Long? = nu
     PlayRequest.Vod(item.name, season.cmdFor(ep), ep, "${season.name} · Episode $ep", key = WatchEntry.episodeKey(item, season, ep), poster = item.poster, item = item, startAtMs = startAtMs,
         next = portalNext(item, season.id, ep))
 
+/**
+ * An episode's length for its button: the portal's own figure, else the length measured when it
+ * was played, else the show's usual episode length (marked "~"). Null when nothing is known.
+ */
+fun episodeLength(portalMinutes: Int?, watched: WatchEntry?, showDuration: String = ""): String? {
+    val min = portalMinutes ?: watched?.durationMs?.takeIf { it > 0 }?.let { ((it + 30_000) / 60_000).toInt().coerceAtLeast(1) }
+    if (min != null) return formatMinutes(min)
+    return showDuration.takeIf { it.isNotBlank() }?.let { "~$it" }
+}
+
+internal fun formatMinutes(min: Int) = if (min >= 60) "${min / 60} h ${min % 60} min".replace(" 0 min", "") else "$min min"
+
 /** "12 min left", "1 h 5 min left". */
 internal fun timeLeft(e: WatchEntry): String {
     val min = ((e.durationMs - e.positionMs).coerceAtLeast(0) / 60_000).toInt()
@@ -324,6 +336,9 @@ fun DetailsScreen(vm: AppViewModel, item: VodItem, onPlay: (PlayRequest) -> Unit
                                                     color = if (f) Color(0xFF39425A) else if (w?.watched == true || w?.inProgress == true) Palette.teal else Palette.muted,
                                                 )
                                                 Text("$ep", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                                                episodeLength(season.episodeMinutes[ep], w, item.duration)?.let {
+                                                    Text(it, fontSize = 12.sp, color = if (f) Color(0xFF39425A) else Palette.muted, maxLines = 1)
+                                                }
                                                 Spacer(Modifier.height(10.dp))
                                                 Box(Modifier.fillMaxWidth().height(4.dp)) {
                                                     if (w?.inProgress == true) Box(Modifier.fillMaxWidth(w.fraction.coerceIn(0.03f, 1f)).height(4.dp).background(Palette.teal))

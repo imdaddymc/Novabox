@@ -60,6 +60,8 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.novabox.tv.data.PlayRequest
 import com.novabox.tv.data.RealDebrid
+import com.novabox.tv.data.WatchEntry
+import androidx.compose.runtime.collectAsState
 
 /** Developer tools: the user's own Real-Debrid torrents and downloads. */
 @Composable
@@ -119,6 +121,8 @@ private fun DebridLink(vm: AppViewModel) {
 @Composable
 private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
     LaunchedEffect(Unit) { vm.loadDebrid() }
+    // Lengths of episodes already played, shown on their rows.
+    val watch by com.novabox.tv.data.AppGraph.watch.entries.collectAsState()
     // Keep the VPN badge current while this tab is showing (information only; nothing is blocked)
     LaunchedEffect(Unit) { while (true) { vm.refreshVpn(); kotlinx.coroutines.delay(5000) } }
     var vpnNote by remember { mutableStateOf<String?>(null) }
@@ -289,7 +293,7 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                                 SectionTitle("VIDEO FILES · ${files.size}")
                                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(4.dp)) {
                                     itemsIndexed(files, key = { _, f -> f.link }) { i, f ->
-                                        PlayRow(episodeTag(f.name) ?: RealDebrid.pretty(f.name), RealDebrid.size(f.bytes), if (i == 0) Modifier.focusRequester(panelFirst) else Modifier) { vm.playDebrid(RealDebrid.pretty(f.name), f.link, alreadyDirect = false, onPlay, releaseName = f.name) }
+                                        PlayRow(episodeTag(f.name) ?: RealDebrid.pretty(f.name), listOfNotNull(episodeLength(null, watch[WatchEntry.debridKey(f.name)]), RealDebrid.size(f.bytes)).joinToString(" · "), if (i == 0) Modifier.focusRequester(panelFirst) else Modifier) { vm.playDebrid(RealDebrid.pretty(f.name), f.link, alreadyDirect = false, onPlay, releaseName = f.name) }
                                     }
                                 }
                             }
@@ -305,7 +309,7 @@ private fun DebridLibrary(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                         SectionTitle("EPISODES · ${g.items.size}")
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(4.dp)) {
                             itemsIndexed(g.items, key = { _, d -> d.id }) { i, d ->
-                                PlayRow(episodeTag(d.name) ?: RealDebrid.pretty(d.name), RealDebrid.size(d.bytes) + " · added " + d.generated.take(10), if (i == 0) Modifier.focusRequester(panelFirst) else Modifier) {
+                                PlayRow(episodeTag(d.name) ?: RealDebrid.pretty(d.name), listOfNotNull(episodeLength(null, watch[WatchEntry.debridKey(d.name)]), RealDebrid.size(d.bytes)).joinToString(" · ") + " · added " + d.generated.take(10), if (i == 0) Modifier.focusRequester(panelFirst) else Modifier) {
                                     vm.playDebrid(RealDebrid.pretty(d.name), d.url, alreadyDirect = true, onPlay, releaseName = d.name)
                                 }
                             }

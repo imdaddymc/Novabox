@@ -16,6 +16,7 @@ the red, green, yellow or blue buttons.
 - **TV guide**: a grid of channels against time (Live TV → TV guide). Move through the next hours and press OK to watch
 - **Recent channels** category, and **Back to …** in the live menu (or the remote's last-channel key) to jump to the previous channel
 - **Continue watching**: films and episodes pick up where you stopped (saved on the TV, no extra data). Watched episodes get a ✓ and the show offers the next one
+- **Episode lengths** on each episode button: the portal's length when it sends one, else the length once played, else the show's usual length (marked ~). Debrid episodes show it once played
 - **Autoplay**: when a portal episode ends, the next one (or the next season's first) starts after a 10-second "Up next". Press Cancel to stop
 - **Audio and Subtitles** buttons in the player; the language you pick is remembered for the next videos
 - **Picture** settings: always play the best quality, match the TV's frame rate to the film, HDR output, and an optional light sharpen filter
@@ -68,7 +69,8 @@ the red, green, yellow or blue buttons.
 | ![Up next](docs/screenshots/27-debrid-up-next.png) Debrid: Up next | ![Free TV HD](docs/screenshots/28-free-tv-hd-check.png) Free TV: HD category and the monthly check |
 | ![Picture](docs/screenshots/29-picture-settings.png) Settings → Picture | ![STB settings](docs/screenshots/30-stb-settings.png) STB settings in a profile |
 | ![Icon tabs](docs/screenshots/31-icon-tabs.png) Icon tabs: the one you are on shows its name | ![Player](docs/screenshots/32-player-icons.png) Player buttons as icons |
-| ![Continue an episode](docs/screenshots/33-continue-episode.png) Continue watching picks up the episode | |
+| ![Continue an episode](docs/screenshots/33-continue-episode.png) Continue watching picks up the episode | ![Episode lengths](docs/screenshots/34-episode-lengths.png) Episode lengths on the buttons |
+| ![Scrubbing](docs/screenshots/35-scrub-bar.png) Scrub along the progress bar; exit sits on the far right | |
 
 ## Using Surfshark with NovaBox
 
@@ -93,7 +95,7 @@ If Real-Debrid refuses a link while the VPN is on, try a different Surfshark loc
 | Search | Choose the **Search** tab, press OK on the search box and type with the on-screen keyboard |
 | Back | Inside a page, jumps back to the tab bar. On the tab bar, exits the app |
 | Live player | ▲ ▼ change channel · ◀ channel list · OK menu (Favourite, Channel list, Previous, Next, Exit) · Back closes the menu or the player |
-| Film player | OK shows the icon controls (back 10s, play/pause, forward 30s, start over, audio, subtitles, exit; the focused one shows its name) · ◀ ▶ skip back 10s / forward 30s · Back hides the controls, then closes the player |
+| Film player | OK shows the icon controls (back 10s, play/pause, forward 30s, start over, audio, subtitles, and exit on the far right; the focused one shows its name) · ◀ ▶ skip back 10s / forward 30s · ▲ from the buttons reaches the progress bar: ◀ ▶ scrub (hold to go faster), the time you'll jump to shows above the bar, OK jumps there (or it jumps when you stop) · Back hides the controls, then closes the player |
 
 ## Install on Google TV (sideload)
 

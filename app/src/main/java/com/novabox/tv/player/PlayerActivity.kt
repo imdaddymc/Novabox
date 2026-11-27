@@ -21,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -498,7 +499,8 @@ class PlayerActivity : ComponentActivity() {
                 VodControls(req, playing, position, duration, resumedAt,
                     onBack10 = { seek(-10_000) }, onToggle = { toggle() }, onFwd30 = { seek(30_000) },
                     onStartOver = { player.seekTo(0); position = 0; resumedAt = 0; poke() },
-                    onTracks = { panel = it }, onExit = { finish() })
+                    onTracks = { panel = it }, onExit = { finish() },
+                    onSeekTo = { t -> player.seekTo(t); position = t; poke() })
             }
             TrackPanelHost(panel, Modifier.align(Alignment.CenterEnd)) { panel = null; poke() }
             upNext?.let { n ->
@@ -597,7 +599,7 @@ class PlayerActivity : ComponentActivity() {
     private fun VodControls(
         req: PlayRequest.Vod, playing: Boolean, position: Long, duration: Long, resumedAt: Long,
         onBack10: () -> Unit, onToggle: () -> Unit, onFwd30: () -> Unit, onStartOver: () -> Unit,
-        onTracks: (Int) -> Unit, onExit: () -> Unit,
+        onTracks: (Int) -> Unit, onExit: () -> Unit, onSeekTo: (Long) -> Unit,
     ) {
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) { delay(50); runCatching { first.requestFocus() } }
@@ -610,14 +612,9 @@ class PlayerActivity : ComponentActivity() {
             if (req.subtitle.isNotBlank()) Text(req.subtitle, fontSize = 16.sp, color = Palette.muted)
             if (resumedAt > 0) Text("Resumed from ${formatTime(resumedAt)}", fontSize = 14.sp, color = Palette.teal)
             Spacer(Modifier.height(14.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(formatTime(position), fontSize = 14.sp, color = Color.White, modifier = Modifier.width(80.dp))
-                ProgressBar(if (duration > 0) position.toFloat() / duration else 0f, Modifier.weight(1f))
-                Text(if (duration > 0) formatTime(duration) else "--:--", fontSize = 14.sp, color = Palette.muted,
-                    modifier = Modifier.width(80.dp).padding(start = 12.dp))
-            }
-            Spacer(Modifier.height(18.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = RowGap, verticalAlignment = Alignment.CenterVertically) {
+            SeekBar(position, duration, onSeekTo)
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = RowGap, verticalAlignment = Alignment.CenterVertically) {
                 // Icon buttons, like a TV remote's transport keys; the focused one shows its name underneath.
                 PlayerIconButton("Back 10 seconds", onBack10) { SkipIcon(back = true, seconds = 10) }
                 PlayerIconButton(if (playing) "Pause" else "Play", onToggle, Modifier.focusRequester(first), primary = true) {
@@ -627,8 +624,74 @@ class PlayerActivity : ComponentActivity() {
                 if (resumedAt > 0) PlayerIconButton("Start over", onStartOver) { Icon(RestartIcon, null, Modifier.size(26.dp)) }
                 PlayerIconButton("Audio", { onTracks(C.TRACK_TYPE_AUDIO) }) { Icon(AudioIcon, null, Modifier.size(26.dp)) }
                 PlayerIconButton("Subtitles", { onTracks(C.TRACK_TYPE_TEXT) }) { Icon(SubtitlesIcon, null, Modifier.size(26.dp)) }
+                // Exit sits on its own at the far right, away from the playback buttons.
+                Spacer(Modifier.weight(1f))
                 PlayerIconButton("Exit player", onExit) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(26.dp)) }
             }
+        }
+    }
+
+    /**
+     * The progress bar. Press ▲ from the buttons to reach it, then ◀ ▶ to scrub: holding a direction
+     * speeds up (10 s, then 30 s, 1 min, and bigger jumps). The time to jump to is shown above the
+     * bar, and playback jumps there on OK or a moment after you stop moving.
+     */
+    @Composable
+    private fun SeekBar(position: Long, duration: Long, onSeekTo: (Long) -> Unit) {
+        var focused by remember { mutableStateOf(false) }
+        var target by remember { mutableStateOf<Long?>(null) }
+        LaunchedEffect(target) {
+            val t = target ?: return@LaunchedEffect
+            delay(900); onSeekTo(t); target = null
+        }
+        val shown = target ?: position
+        val fraction = if (duration > 0) (shown.toFloat() / duration).coerceIn(0f, 1f) else 0f
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(formatTime(position), fontSize = 14.sp, color = Color.White, modifier = Modifier.width(80.dp))
+            androidx.compose.foundation.layout.BoxWithConstraints(
+                Modifier.weight(1f).height(56.dp)
+                    .onFocusChanged {
+                        focused = it.isFocused
+                        if (!it.isFocused) target?.let { t -> onSeekTo(t); target = null }
+                    }
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown || duration <= 0) return@onPreviewKeyEvent false
+                        val dir = when (e.key) {
+                            Key.DirectionLeft -> -1
+                            Key.DirectionRight -> 1
+                            Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { target?.let { t -> onSeekTo(t); target = null }; return@onPreviewKeyEvent true }
+                            else -> return@onPreviewKeyEvent false
+                        }
+                        val held = e.nativeKeyEvent.repeatCount
+                        val step = when {
+                            held < 3 -> 10_000L
+                            held < 10 -> 30_000L
+                            held < 20 -> 60_000L
+                            else -> maxOf(120_000L, duration / 40)
+                        }
+                        target = ((target ?: position) + dir * step).coerceIn(0L, duration)
+                        true
+                    }
+                    .focusable(),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                val barH = if (focused) 8.dp else 4.dp
+                Box(Modifier.fillMaxWidth().height(barH).background(Color(0x33FFFFFF), androidx.compose.foundation.shape.RoundedCornerShape(4.dp)))
+                Box(Modifier.fillMaxWidth(fraction).height(barH).background(Palette.teal, androidx.compose.foundation.shape.RoundedCornerShape(4.dp)))
+                if (focused) {
+                    val x = maxWidth * fraction
+                    Box(Modifier.offset(x = x - 10.dp).size(20.dp).background(Color.White, androidx.compose.foundation.shape.CircleShape))
+                    Text(
+                        formatTime(shown), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0A0E18),
+                        modifier = Modifier.offset(x = (x - 30.dp).coerceIn(0.dp, maxWidth - 60.dp), y = (-26).dp)
+                            .width(60.dp).background(Color.White, androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                            .padding(vertical = 2.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            }
+            Text(if (duration > 0) formatTime(duration) else "--:--", fontSize = 14.sp, color = Palette.muted,
+                modifier = Modifier.width(80.dp).padding(start = 12.dp))
         }
     }
 

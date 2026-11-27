@@ -151,7 +151,11 @@ data class VodItem(
 }
 
 /** [episodeCmds]: portals that list each episode separately give each its own play command. */
-data class Season(val id: String, val name: String, val cmd: String, val episodes: List<Int>, val episodeCmds: Map<Int, String> = emptyMap()) {
+/** [episodeMinutes]: each episode's length, when the portal sends one. */
+data class Season(
+    val id: String, val name: String, val cmd: String, val episodes: List<Int>,
+    val episodeCmds: Map<Int, String> = emptyMap(), val episodeMinutes: Map<Int, Int> = emptyMap(),
+) {
     fun cmdFor(ep: Int) = episodeCmds[ep] ?: cmd
 }
 

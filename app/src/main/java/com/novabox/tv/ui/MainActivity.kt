@@ -106,10 +106,18 @@ private fun ErrorScreen(vm: AppViewModel, message: String) {
             "unable to resolve host" in m || "unknownhost" in m -> "The portal address couldn't be found. Check the portal URL in your profile, and that the TV is online."
             "timeout" in m || "timed out" in m -> "The portal didn't answer in time. It may be busy or down; try again in a few minutes."
             "failed to connect" in m || "refused" in m -> "The portal refused the connection. Check the address and port in the portal URL."
-            "mac" in m && ("not found" in m || "blocked" in m || "denied" in m) -> "The portal didn't accept this MAC address. Check it with your provider."
+            "portal says" in m || ("mac" in m && ("not found" in m || "blocked" in m || "denied" in m || "not authorized" in m || "registered" in m)) ->
+                "The portal didn't accept this MAC address. Ask your provider to register it, or enter the MAC they already have on file."
             else -> message.lineSequence().first()
         }
         Text(summary, color = Palette.text, fontSize = 20.sp)
+        // Providers authorize one MAC address; show it big so it can be read out or compared.
+        vm.activeProfile?.let { p ->
+            Spacer(Modifier.height(14.dp))
+            Text("MAC address sent:  ${p.mac.uppercase()}", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.teal)
+            Text("Your provider must have this exact MAC registered. To use the MAC from another app or box, choose Edit profile.",
+                color = Palette.muted, fontSize = 14.sp)
+        }
         Spacer(Modifier.height(10.dp))
         Text(
             "Details: " + message.lineSequence().drop(if (summary == message.lineSequence().first()) 1 else 0).joinToString(" ").ifBlank { message },

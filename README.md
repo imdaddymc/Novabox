@@ -18,10 +18,13 @@ the red, green, yellow or blue buttons.
 - **Continue watching**: films and episodes pick up where you stopped. Watched episodes get a ✓ and the show offers the next one
 - **Audio and Subtitles** buttons in the player; the language you pick is remembered for the next videos
 - **Picture** settings: always play the best quality, match the TV's frame rate to the film, HDR output, and an optional light sharpen filter
-- Films and series by category, with posters, details, seasons and episodes
-- Favourites for channels, films and series, saved on the device for each profile
+- Films and series by category, with posters, details, seasons and episodes. Shows a portal files under Movies are moved to the Series tab
+  (categories named like "TV shows", "Web series", "Dramas"), so Movies keeps only films
+- Favourites (♥) for channels, films and series, saved on the device for each profile
 - Search across channels, films and series
 - Account info from the portal (expiry date, plan)
+- The provider authorizes one MAC address per profile: NovaBox keeps the MAC you enter and never changes it.
+  If the portal turns it down, the error screen shows the MAC that was sent
 - Network check (Settings → Run network check, or from the "Couldn't connect" screen): tests the TV's connection, internet access and speed, the portal's address, server and login, and a live stream, then says what to fix
 - **Free TV**: channels that broadcasters stream free to the public, by country (from the
   community list at iptv-org). No portal, profile or login needed; works even with no profiles set up.

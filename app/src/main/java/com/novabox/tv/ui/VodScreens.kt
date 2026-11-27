@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -113,7 +114,7 @@ fun filmRequest(item: VodItem, startAtMs: Long? = null) =
     PlayRequest.Vod(item.name, item.cmd, null, key = WatchEntry.filmKey(item), poster = item.poster, item = item, startAtMs = startAtMs)
 
 fun episodeRequest(item: VodItem, season: Season, ep: Int, startAtMs: Long? = null) =
-    PlayRequest.Vod(item.name, season.cmd, ep, "${season.name} · Episode $ep", key = WatchEntry.episodeKey(item, season, ep), poster = item.poster, item = item, startAtMs = startAtMs)
+    PlayRequest.Vod(item.name, season.cmdFor(ep), ep, "${season.name} · Episode $ep", key = WatchEntry.episodeKey(item, season, ep), poster = item.poster, item = item, startAtMs = startAtMs)
 
 /** "12 min left", "1 h 5 min left". */
 internal fun timeLeft(e: WatchEntry): String {
@@ -253,7 +254,7 @@ fun DetailsScreen(vm: AppViewModel, item: VodItem, onPlay: (PlayRequest) -> Unit
                             if (isFav) "Remove favourite" else "Add to favourites",
                             { AppGraph.favorites.toggle(item) },
                             if (item.kind == VodKind.SERIES && next == null) Modifier.focusRequester(playFocus) else Modifier,
-                            icon = Icons.Filled.Star, tint = if (isFav) Palette.gold else null,
+                            icon = Icons.Filled.Favorite, tint = if (isFav) Palette.heart else null,
                         )
                         NovaButton("Back", { vm.pop() })
                     }

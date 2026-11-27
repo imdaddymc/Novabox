@@ -128,12 +128,14 @@ data class VodItem(
     /** Old-style portals list episode numbers directly on the series item. */
     val episodes: List<Int>,
     val categoryId: String,
+    /** The portal section the item came from: some portals list shows under Movies (VOD). */
+    val source: VodKind = kind,
 ) {
     fun toJson() = JSONObject().apply {
         put("id", id); put("kind", kind.name); put("name", name); put("cmd", cmd); put("poster", poster)
         put("description", description); put("year", year); put("rating", rating); put("genres", genres)
         put("director", director); put("actors", actors); put("duration", duration)
-        put("episodes", JSONArray(episodes)); put("categoryId", categoryId)
+        put("episodes", JSONArray(episodes)); put("categoryId", categoryId); put("source", source.name)
     }
 
     companion object {
@@ -144,15 +146,19 @@ data class VodItem(
             o.optString("actors"), o.optString("duration"),
             o.optJSONArray("episodes")?.let { a -> (0 until a.length()).map { a.optInt(it) } } ?: emptyList(),
             o.optString("categoryId"),
-        )
+        ).let { v -> v.copy(source = runCatching { VodKind.valueOf(o.optString("source")) }.getOrDefault(v.kind)) }
     }
 }
 
-data class Season(val id: String, val name: String, val cmd: String, val episodes: List<Int>)
+/** [episodeCmds]: portals that list each episode separately give each its own play command. */
+data class Season(val id: String, val name: String, val cmd: String, val episodes: List<Int>, val episodeCmds: Map<Int, String> = emptyMap()) {
+    fun cmdFor(ep: Int) = episodeCmds[ep] ?: cmd
+}
 
 data class EpgEntry(val title: String, val description: String, val start: Long, val end: Long)
 
-data class Page<T>(val items: List<T>, val totalItems: Int, val page: Int, val pageSize: Int) {
+/** [fetched]: rows the portal sent, before any were left out (shows on the Movies tab). */
+data class Page<T>(val items: List<T>, val totalItems: Int, val page: Int, val pageSize: Int, val fetched: Int = items.size) {
     val hasMore get() = pageSize > 0 && page * pageSize < totalItems
 }
 

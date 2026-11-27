@@ -61,7 +61,7 @@ fun FavoritesScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
     val channels by AppGraph.favorites.channels.collectAsState()
     val vod by AppGraph.favorites.vod.collectAsState()
     if (channels.isEmpty() && vod.isEmpty()) {
-        CenterMessage("No favourites yet. Use the ☆ button next to any channel, film or series to add it here.")
+        CenterMessage("No favourites yet. Use the ♡ button next to any channel, film or series to add it here.")
         return
     }
     ResultSections(

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.materialIcon
 import androidx.compose.material.icons.materialPath
 import androidx.compose.material.icons.filled.PlayArrow
@@ -97,6 +98,7 @@ import com.novabox.tv.ui.Logo
 import com.novabox.tv.ui.NovaButton
 import com.novabox.tv.ui.NovaTheme
 import com.novabox.tv.ui.Palette
+import com.novabox.tv.ui.FavMark
 import com.novabox.tv.ui.ProgressBar
 import com.novabox.tv.ui.RowGap
 import com.novabox.tv.ui.currentProgramme
@@ -778,7 +780,7 @@ class PlayerActivity : ComponentActivity() {
                         Text("${c.number}", color = Palette.teal, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(12.dp))
                         Text(c.name, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (isFav) Text("  ★", color = Palette.gold, fontSize = 22.sp)
+                        if (isFav) { Spacer(Modifier.width(10.dp)); FavMark(true, 22.dp) }
                     }
                     if (c.note.isNotBlank()) Text(c.note, fontSize = 14.sp, color = Palette.muted)
                     if (now != null) {
@@ -791,7 +793,7 @@ class PlayerActivity : ComponentActivity() {
             if (menu) {
                 Spacer(Modifier.height(18.dp))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = RowGap) {
-                    if (canFavourite) NovaButton(if (isFav) "Remove favourite" else "Favourite", onFav, Modifier.focusRequester(first), icon = Icons.Filled.Star, tint = if (isFav) Palette.gold else null)
+                    if (canFavourite) NovaButton(if (isFav) "Remove favourite" else "Favourite", onFav, Modifier.focusRequester(first), icon = Icons.Filled.Favorite, tint = if (isFav) Palette.heart else null)
                     NovaButton("Channel list", onList, if (canFavourite) Modifier else Modifier.focusRequester(first), icon = Icons.AutoMirrored.Filled.List)
                     if (lastChannel != null) NovaButton("Back to ${lastChannel.name.let { if (it.length > 18) it.take(17) + "…" else it }}", onLast, icon = RestartIcon)
                     // Only offered when there is a choice, to keep the bar short on single-track channels.
@@ -827,7 +829,7 @@ class PlayerActivity : ComponentActivity() {
                             Logo(c.logo, c.name, 34.dp)
                             Spacer(Modifier.width(12.dp))
                             Text(c.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 15.sp)
-                            if (c.id in favIds) Text("★", color = Palette.gold)
+                            if (c.id in favIds) FavMark(true, 18.dp)
                         }
                     }
                 }

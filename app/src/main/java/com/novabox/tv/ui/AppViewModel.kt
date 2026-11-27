@@ -226,10 +226,16 @@ class AppViewModel : ViewModel() {
         l.loading = true
         viewModelScope.launch {
             try {
-                val page = client!!.vodPage(kind, cat, l.page + 1)
+                // A page can come back empty once shows are left out of Movies: keep going (up to 5 pages).
+                var page = client!!.vodPage(kind, cat, l.page + 1)
+                var skipped = 0
+                while (page.items.isEmpty() && page.fetched > 0 && page.hasMore && skipped < 5) {
+                    skipped++
+                    page = client!!.vodPage(kind, cat, page.page + 1)
+                }
                 l.items.addAll(page.items)
                 l.page = page.page
-                l.hasMore = page.hasMore && page.items.isNotEmpty()
+                l.hasMore = page.hasMore && page.fetched > 0
                 l.error = null
             } catch (e: Exception) {
                 l.error = e.message
@@ -266,10 +272,12 @@ class AppViewModel : ViewModel() {
             searching = true
             try {
                 searchChannels = channels.filter { it.name.contains(q.trim(), ignoreCase = true) }.take(60)
-                val m = async { runCatching { client?.vodPage(VodKind.MOVIE, "*", 1, q.trim())?.items }.getOrNull() ?: emptyList() }
+                val m = async { runCatching { client?.vodPage(VodKind.MOVIE, "*", 1, q.trim(), keepShows = true)?.items }.getOrNull() ?: emptyList() }
                 val s = async { runCatching { client?.vodPage(VodKind.SERIES, "*", 1, q.trim())?.items }.getOrNull() ?: emptyList() }
-                searchMovies = m.await()
-                searchSeries = s.await().map { it.copy(kind = VodKind.SERIES) }
+                // Shows a portal files under Movies are listed with the series.
+                val (films, vodShows) = m.await().partition { it.kind == VodKind.MOVIE }
+                searchMovies = films
+                searchSeries = s.await().map { it.copy(kind = VodKind.SERIES) } + vodShows
             } finally {
                 searching = false
             }

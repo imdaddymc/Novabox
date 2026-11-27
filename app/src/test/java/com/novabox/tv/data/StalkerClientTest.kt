@@ -17,6 +17,7 @@ class StalkerClientTest {
     private val requests = mutableListOf<RecordedRequest>()
     private var expireOnce = false
     private var messy = false
+    private var unknownMac = false
 
     @Before fun setUp() {
         server = MockWebServer()
@@ -34,6 +35,7 @@ class StalkerClientTest {
                 if (messy && action == "get_all_channels") return MockResponse().setBody("""{"js":{"total_items":3,"data":[
                     {"id":"7","name":"A","number":"1","cmd":"a"},{"id":"7","name":"A again","number":"2","cmd":"a2"},
                     {"id":"","name":"B","number":"3","cmd":"b"},{"id":"","name":"C","number":"4","cmd":"c"}]}}""")
+                if (unknownMac && action == "get_profile") return MockResponse().setBody("""{"js":{"id":null,"status":1,"msg":"MAC address not found"}}""")
                 val body = when ("$type/$action") {
                     "stb/handshake" -> """{"js":{"token":"TOKEN123","random":"abc"}}"""
                     "stb/get_profile" -> """{"js":{"id":"1","name":"test","status":0}}"""
@@ -67,7 +69,7 @@ class StalkerClientTest {
         c.login()
         assertTrue(c.loggedIn)
         val hs = requests.first { it.requestUrl!!.queryParameter("action") == "handshake" }
-        assertTrue(hs.getHeader("Cookie")!!.contains("mac=00%3A1A%3A79%3A12%3A34%3A56"))
+        assertTrue(hs.getHeader("Cookie")!!.startsWith("mac=00:1A:79:12:34:56;"))
         assertTrue(hs.getHeader("User-Agent")!!.contains("MAG250"))
 
         val genres = c.liveGenres()
@@ -135,5 +137,15 @@ class StalkerClientTest {
         assertEquals("my-fw", back.firmware); assertEquals("1920x1080", back.resolution)
         assertEquals(1920 to 1080, com.novabox.tv.player.maxVideoSize(back.resolution))
         assertEquals(null, com.novabox.tv.player.maxVideoSize(""))
+    }
+
+    /** The MAC goes in the cookie as typed, and a portal that doesn't know it gets its own message shown. */
+    @Test fun unknownMacShowsPortalMessage() = runTest {
+        client().login()
+        assertTrue(requests.first().getHeader("Cookie")!!.startsWith("mac=00:1A:79:12:34:56;"))
+        unknownMac = true
+        val e = runCatching { client().login() }.exceptionOrNull()
+        assertTrue(e?.message.orEmpty(), e?.message.orEmpty().contains("MAC address not found"))
+        assertTrue(e?.message.orEmpty().contains("00:1A:79:12:34:56"))
     }
 }

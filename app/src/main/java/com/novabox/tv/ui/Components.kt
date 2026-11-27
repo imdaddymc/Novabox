@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -56,6 +58,8 @@ object Palette {
     val accent = Color(0xFF5B8CFF)
     val teal = Color(0xFF3DDCCA)
     val gold = Color(0xFFFFC857)
+    /** Favourites are hearts everywhere (matching the Favourites tab); stars are only for ratings. */
+    val heart = Color(0xFFFF5C7A)
     val text = Color(0xFFE8ECF7)
     val muted = Color(0xFF8A94AD)
     val danger = Color(0xFFFF6B6B)
@@ -202,7 +206,9 @@ fun PosterCard(
                     AsyncImage(model = poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
                 if (favorite) {
-                    Text("★", color = Palette.gold, fontSize = 22.sp, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                    Box(Modifier.align(Alignment.TopEnd).padding(6.dp).background(Color(0x99000000), RoundedCornerShape(50)).padding(5.dp)) {
+                        FavMark(true, 16.dp)
+                    }
                 }
                 if (progress != null) {
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(5.dp).background(Color(0x99000000))) {
@@ -268,4 +274,15 @@ fun Modifier.onBackKey(action: () -> Unit): Modifier = this.onPreviewKeyEvent { 
     if (e.key != androidx.compose.ui.input.key.Key.Back) return@onPreviewKeyEvent false
     if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyUp) action()
     true
+}
+
+/** The favourite heart: filled when [on], outlined otherwise. [tint] null uses the surrounding text colour. */
+@Composable
+fun FavMark(on: Boolean, size: androidx.compose.ui.unit.Dp = 18.dp, tint: Color? = Palette.heart) {
+    Icon(
+        if (on) androidx.compose.material.icons.Icons.Filled.Favorite else androidx.compose.material.icons.Icons.Filled.FavoriteBorder,
+        contentDescription = if (on) "Favourite" else null,
+        modifier = Modifier.size(size),
+        tint = tint ?: LocalContentColor.current,
+    )
 }

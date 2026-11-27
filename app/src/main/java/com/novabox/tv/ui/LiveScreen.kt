@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -127,7 +128,7 @@ fun LiveScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                                         Text(now.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = if (f) Color(0xFF39425A) else Palette.muted)
                                     }
                                 }
-                                if (isFav) Text("★", color = Palette.gold, fontSize = 18.sp)
+                                if (isFav) FavMark(true, 18.dp)
                             }
                         }
                         // A dedicated, focusable favourite toggle: no colour button needed.
@@ -138,7 +139,7 @@ fun LiveScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
                             modifier = Modifier.size(44.dp),
                         ) { f ->
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(if (isFav) "★" else "☆", fontSize = 20.sp, color = if (isFav && !f) Palette.gold else Color.Unspecified)
+                                FavMark(isFav, 22.dp, tint = if (isFav && !f) Palette.heart else null)
                             }
                         }
                     }
@@ -187,7 +188,7 @@ private fun ChannelInfo(vm: AppViewModel, c: Channel, isFav: Boolean, onWatch: (
             NovaButton(
                 if (isFav) "Remove" else "Favourite",
                 { AppGraph.favorites.toggle(c) },
-                icon = Icons.Filled.Star, tint = if (isFav) Palette.gold else null,
+                icon = Icons.Filled.Favorite, tint = if (isFav) Palette.heart else null,
             )
         }
         Spacer(Modifier.height(22.dp))

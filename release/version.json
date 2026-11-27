@@ -1,6 +1,6 @@
 {
-  "versionCode": 7,
-  "versionName": "1.4.0",
-  "notes": "TV guide grid, Continue watching with resume, audio and subtitle picker, recent channels and Back to last channel, picture options, Debrid next-episode autoplay, Free TV HD category, backup feeds and monthly dead-stream clean-up, and STB settings per profile.",
+  "versionCode": 8,
+  "versionName": "1.4.1",
+  "notes": "Shows that a portal lists under Movies now open with their seasons and episodes, and move to the Series tab. Favourites use a heart everywhere. If a portal turns down the MAC address, the error screen shows the MAC that was sent.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

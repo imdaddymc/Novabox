@@ -51,7 +51,9 @@ class StalkerClient(val profile: Profile) {
         if (referer.isNotEmpty()) put("Referer", referer)
     }
 
-    private fun cookie() = "mac=${enc(mac)}; stb_lang=${profile.language}; timezone=${enc(profile.timezone)}"
+    // The MAC goes in plain (colons are allowed in cookies): PHP portals read it either way, but some
+    // panels match the raw Cookie header and can't find an encoded MAC.
+    private fun cookie() = "mac=$mac; stb_lang=${profile.language}; timezone=${enc(profile.timezone)}"
 
     // ---------------------------------------------------------------- login
 
@@ -100,12 +102,15 @@ class StalkerClient(val profile: Profile) {
                 getProfile()
                 loggedIn = true
                 return@withLock
+            } catch (e: PortalSays) {
+                loggedIn = false
+                throw PortalException(e.message ?: "The portal refused this device")
             } catch (e: Exception) {
                 errors += "${ep}: ${e.message ?: e.javaClass.simpleName}"
             }
         }
         loggedIn = false
-        throw PortalException("Could not log in to the portal. Check the URL and MAC address.\n" + errors.take(3).joinToString("\n"))
+        throw PortalException("Could not log in to the portal. Check the URL, and that your provider has registered this MAC address: $mac\n" + errors.take(3).joinToString("\n"))
     } }
 
     private fun getProfile() {
@@ -134,7 +139,12 @@ class StalkerClient(val profile: Profile) {
             )
             if (a.opt("js") == false) throw PortalException("Login or password rejected")
         }
-        if (js != null && js.has("blocked") && js.optString("blocked") == "1") throw PortalException("This MAC address is blocked by the portal")
+        if (js != null && js.has("blocked") && js.optString("blocked") == "1") throw PortalSays("This MAC address ($mac) is blocked by the portal")
+        // Portals answer an unknown MAC with a message and no account id; show it instead of carrying on.
+        val msg = js?.let { it.optString("msg").ifBlank { it.optString("block_msg") } }?.takeIf { it.isNotBlank() && it != "null" }
+        if (js != null && msg != null && js.optString("id").let { it.isBlank() || it == "null" } && profile.login.isBlank()) {
+            throw PortalSays("The portal says: $msg\nMAC sent: $mac")
+        }
     }
 
     // ---------------------------------------------------------------- transport
@@ -163,6 +173,8 @@ class StalkerClient(val profile: Profile) {
     }
 
     private class AuthExpired : Exception("Authorization failed")
+    /** The portal itself answered and refused this device: no point trying other endpoints. */
+    private class PortalSays(msg: String) : Exception(msg)
 
     /** Calls the portal, logging in again once if the session expired. */
     private suspend fun call(params: Map<String, String>): JSONObject = withContext(Dispatchers.IO) {
@@ -275,22 +287,42 @@ class StalkerClient(val profile: Profile) {
     private fun type(kind: VodKind) = if (kind == VodKind.MOVIE) "vod" else "series"
 
     suspend fun vodCategories(kind: VodKind): List<Genre> {
-        val js = call(mapOf("type" to type(kind), "action" to "get_categories")).optJSONArray("js") ?: JSONArray()
+        val own = categoriesOf(type(kind))
+        // Some portals file TV shows under Movies (VOD): those categories move to the Series tab.
+        val vod = if (kind == VodKind.SERIES) runCatching { categoriesOf("vod") }.getOrDefault(emptyList()) else own
+        return when (kind) {
+            VodKind.MOVIE -> own.filterNot { isShowCategory(it.title) }
+            VodKind.SERIES -> own + vod.filter { isShowCategory(it.title) }.map { it.copy(id = VOD_PREFIX + it.id) }
+        }.distinctBy { it.id }
+    }
+
+    private suspend fun categoriesOf(type: String): List<Genre> {
+        val js = call(mapOf("type" to type, "action" to "get_categories")).optJSONArray("js") ?: JSONArray()
         return (0 until js.length()).mapNotNull { i ->
             js.optJSONObject(i)?.let { Genre(it.optString("id"), it.optString("title").ifBlank { "Unnamed" }) }
         }.filter { it.id.isNotBlank() }.distinctBy { it.id }
     }
 
-    suspend fun vodPage(kind: VodKind, categoryId: String, page: Int, search: String = ""): Page<VodItem> {
+    /**
+     * One page of a category. Films and shows are kept apart: shows a portal lists under Movies are
+     * left out of the Movies tab (unless [keepShows]) and appear in the Series tab through their category.
+     */
+    suspend fun vodPage(kind: VodKind, categoryId: String, page: Int, search: String = "", keepShows: Boolean = false): Page<VodItem> {
+        val fromVod = categoryId.startsWith(VOD_PREFIX)
+        val cat = categoryId.removePrefix(VOD_PREFIX)
         val params = mutableMapOf(
-            "type" to type(kind), "action" to "get_ordered_list", "category" to categoryId.ifBlank { "*" },
+            "type" to if (fromVod) "vod" else type(kind), "action" to "get_ordered_list", "category" to cat.ifBlank { "*" },
             "genre" to "*", "sortby" to "added", "hd" to "0", "fav" to "0", "p" to "$page",
         )
         if (search.isNotBlank()) params["search"] = search
         val js = call(params).optJSONObject("js") ?: return Page(emptyList(), 0, page, 0)
         val a = js.optJSONArray("data") ?: JSONArray()
-        val items = (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { parseVod(it, kind, categoryId) } }
-        return Page(items, js.optInt("total_items"), page, js.optInt("max_page_items", items.size))
+        var items = (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { parseVod(it, if (fromVod) VodKind.MOVIE else kind, categoryId) } }
+        if (fromVod) items = items.map { it.copy(kind = VodKind.SERIES, source = VodKind.MOVIE) }
+        val pageSize = js.optInt("max_page_items", items.size)
+        val fetched = items.size
+        if (kind == VodKind.MOVIE && !keepShows) items = items.filter { it.kind == VodKind.MOVIE }
+        return Page(items, js.optInt("total_items"), page, pageSize, fetched)
     }
 
     private fun parseVod(o: JSONObject, kind: VodKind, cat: String): VodItem {
@@ -311,24 +343,66 @@ class StalkerClient(val profile: Profile) {
             duration = o.optString("time").clean().let { if (it.isNotEmpty() && it != "0") "$it min" else "" },
             episodes = eps,
             categoryId = o.optString("category_id", cat),
+            source = kind,
         )
     }
 
-    /** Newer portals nest seasons under the series item. */
+    /**
+     * Seasons of a show. Newer portals nest them under the item; shows listed under Movies are asked
+     * for through the VOD section, and seasons without an episode list get their episodes fetched.
+     */
     suspend fun seasons(item: VodItem): List<Season> {
         if (item.episodes.isNotEmpty()) return listOf(Season(item.id, "Episodes", item.cmd, item.episodes))
+        val types = if (item.source == VodKind.MOVIE) listOf("vod", "series") else listOf("series", "vod")
+        for (t in types) {
+            val found = runCatching { seasonsFrom(t, item) }.getOrDefault(emptyList())
+            if (found.isNotEmpty()) return found
+        }
+        return emptyList()
+    }
+
+    private suspend fun seasonsFrom(type: String, item: VodItem): List<Season> {
         val js = call(
             mapOf(
-                "type" to "series", "action" to "get_ordered_list", "movie_id" to item.id, "season_id" to "0",
-                "episode_id" to "0", "category" to item.categoryId.ifBlank { "*" }, "sortby" to "added", "p" to "1",
+                "type" to type, "action" to "get_ordered_list", "movie_id" to item.id, "season_id" to "0",
+                "episode_id" to "0", "category" to item.categoryId.removePrefix(VOD_PREFIX).ifBlank { "*" }, "sortby" to "added", "p" to "1",
+            )
+        ).optJSONObject("js") ?: return emptyList()
+        val a = js.optJSONArray("data") ?: return emptyList()
+        val rows = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+        // A portal that ignores movie_id sends its whole catalogue back; only keep rows that look like seasons.
+        val looksLikeSeasons = rows.isNotEmpty() && rows.none { it.optString("id") == item.id } && rows.all { r ->
+            r.optJSONArray("series")?.length()?.let { it > 0 } == true || r.optBoolean("is_season") || r.optString("is_season") == "1" ||
+                r.optString("name").contains("season", ignoreCase = true) || r.optString("id").contains(':')
+        }
+        if (!looksLikeSeasons) return emptyList()
+        return rows.mapIndexedNotNull { i, o ->
+            val sid = o.optString("id")
+            val name = o.optString("name").ifBlank { "Season ${i + 1}" }
+            val listed = o.optJSONArray("series")?.let { s -> (0 until s.length()).map { s.optInt(it) } }.orEmpty().filter { it > 0 }
+            if (listed.isNotEmpty()) return@mapIndexedNotNull Season(sid, name, o.optString("cmd"), listed)
+            val eps = runCatching { episodesOf(type, item, sid) }.getOrDefault(emptyList())
+            if (eps.isEmpty()) null
+            else Season(sid, name, o.optString("cmd"), eps.map { it.first }, eps.associate { it.first to it.second })
+        }
+    }
+
+    /** Episodes listed one by one under a season: (episode number, play command). */
+    private suspend fun episodesOf(type: String, item: VodItem, seasonId: String): List<Pair<Int, String>> {
+        val js = call(
+            mapOf(
+                "type" to type, "action" to "get_ordered_list", "movie_id" to item.id, "season_id" to seasonId,
+                "episode_id" to "0", "category" to item.categoryId.removePrefix(VOD_PREFIX).ifBlank { "*" }, "sortby" to "added", "p" to "1",
             )
         ).optJSONObject("js") ?: return emptyList()
         val a = js.optJSONArray("data") ?: return emptyList()
         return (0 until a.length()).mapNotNull { i ->
             val o = a.optJSONObject(i) ?: return@mapNotNull null
-            val eps = o.optJSONArray("series")?.let { s -> (0 until s.length()).map { s.optInt(it) } } ?: emptyList()
-            Season(o.optString("id"), o.optString("name").ifBlank { "Season ${i + 1}" }, o.optString("cmd"), eps)
-        }
+            val cmd = o.optString("cmd").takeIf { it.isNotBlank() && it != "null" } ?: return@mapNotNull null
+            val n = o.optString("series_number").toIntOrNull()
+                ?: Regex("""\d+""").findAll(o.optString("name")).lastOrNull()?.value?.toIntOrNull() ?: (i + 1)
+            n to cmd
+        }.distinctBy { it.first }.sortedBy { it.first }
     }
 
     suspend fun vodLink(cmd: String, episode: Int? = null): String {
@@ -355,6 +429,12 @@ class StalkerClient(val profile: Profile) {
     private fun String.clean() = if (this == "null" || this == "N/A") "" else this.trim()
 
     companion object {
+        /** Marks a Series-tab category that really lives in the portal's VOD section. */
+        const val VOD_PREFIX = "vod:"
+
+        private val SHOW_WORDS = Regex("""\b(tv ?shows?|web ?series|series|serials?|dramas|seasons?|shows|novelas?|dizi)\b""", RegexOption.IGNORE_CASE)
+        fun isShowCategory(title: String) = SHOW_WORDS.containsMatchIn(title)
+
         fun cleanCmd(cmd: String): String {
             var c = cmd.trim()
             listOf("ffmpeg ", "ffrt ", "ffrt2 ", "ffrt3 ", "auto ").forEach { if (c.startsWith(it)) c = c.removePrefix(it) }

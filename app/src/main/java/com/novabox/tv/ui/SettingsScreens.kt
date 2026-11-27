@@ -376,6 +376,7 @@ fun ProfileEditScreen(vm: AppViewModel, initial: Profile?, firstRun: Boolean) {
         error = when {
             p.portalUrl.isBlank() -> "Enter the portal URL"
             !Profile.isValidMac(p.mac) -> "The MAC address should look like 00:1A:79:12:34:56"
+            p.mac.equals(Profile.DEFAULT_MAC, ignoreCase = true) -> "00:1A:79:00:00:00 is only a placeholder. Enter the MAC address your IPTV provider registered for you"
             else -> null
         }
         return error == null

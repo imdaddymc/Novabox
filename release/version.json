@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "versionName": "1.4.1",
-  "notes": "Shows that a portal lists under Movies now open with their seasons and episodes, and move to the Series tab. Favourites use a heart everywhere. If a portal turns down the MAC address, the error screen shows the MAC that was sent.",
+  "versionCode": 9,
+  "versionName": "1.4.2",
+  "notes": "Episodes now load for shows on portals that list each episode's video file separately (Ministra 5), including long seasons. The details page keeps the title on screen, and ratings of 0 are hidden.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

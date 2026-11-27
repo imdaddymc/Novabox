@@ -376,9 +376,10 @@ class StalkerClient(val profile: Profile) {
                 r.optString("name").contains("season", ignoreCase = true) || r.optString("id").contains(':')
         }
         if (!looksLikeSeasons) return emptyList()
-        return rows.mapIndexedNotNull { i, o ->
+        return rows.sortedBy { it.optString("season_number").toIntOrNull() ?: Int.MAX_VALUE }.mapIndexedNotNull { i, o ->
             val sid = o.optString("id")
-            val name = o.optString("name").ifBlank { "Season ${i + 1}" }
+            val number = o.optString("season_number").toIntOrNull()
+            val name = number?.let { "Season $it" } ?: o.optString("name").ifBlank { "Season ${i + 1}" }
             val listed = o.optJSONArray("series")?.let { s -> (0 until s.length()).map { s.optInt(it) } }.orEmpty().filter { it > 0 }
             if (listed.isNotEmpty()) return@mapIndexedNotNull Season(sid, name, o.optString("cmd"), listed)
             val eps = runCatching { episodesOf(type, item, sid) }.getOrDefault(emptyList())
@@ -389,23 +390,55 @@ class StalkerClient(val profile: Profile) {
 
     /** Episodes listed one by one under a season: (episode number, play command). */
     private suspend fun episodesOf(type: String, item: VodItem, seasonId: String): List<Pair<Int, String>> {
-        val js = call(
-            mapOf(
-                "type" to type, "action" to "get_ordered_list", "movie_id" to item.id, "season_id" to seasonId,
-                "episode_id" to "0", "category" to item.categoryId.removePrefix(VOD_PREFIX).ifBlank { "*" }, "sortby" to "added", "p" to "1",
-            )
-        ).optJSONObject("js") ?: return emptyList()
-        val a = js.optJSONArray("data") ?: return emptyList()
-        return (0 until a.length()).mapNotNull { i ->
-            val o = a.optJSONObject(i) ?: return@mapNotNull null
-            val cmd = o.optString("cmd").takeIf { it.isNotBlank() && it != "null" } ?: return@mapNotNull null
-            val n = o.optString("series_number").toIntOrNull()
-                ?: Regex("""\d+""").findAll(o.optString("name")).lastOrNull()?.value?.toIntOrNull() ?: (i + 1)
-            n to cmd
-        }.distinctBy { it.first }.sortedBy { it.first }
+        val out = mutableListOf<Pair<Int, String>>()
+        var page = 1
+        // Portals send 14 episodes a page; long-running dramas need several pages.
+        while (page <= 20) {
+            val js = call(
+                mapOf(
+                    "type" to type, "action" to "get_ordered_list", "movie_id" to item.id, "season_id" to seasonId,
+                    "episode_id" to "0", "category" to item.categoryId.removePrefix(VOD_PREFIX).ifBlank { "*" }, "sortby" to "added", "p" to "$page",
+                )
+            ).optJSONObject("js") ?: break
+            val a = js.optJSONArray("data") ?: break
+            if (a.length() == 0) break
+            for (i in 0 until a.length()) {
+                val o = a.optJSONObject(i) ?: continue
+                // Ministra 5 lists episodes without a play command: the file is one level further down,
+                // fetched when the episode is played (see vodLink).
+                val cmd = o.optString("cmd").takeIf { it.isNotBlank() && it != "null" }
+                    ?: o.optString("id").takeIf { it.isNotBlank() }?.let { "$EPISODE_PREFIX$type|${item.id}|$seasonId|$it|${item.categoryId.removePrefix(VOD_PREFIX)}" }
+                    ?: continue
+                val n = o.optString("series_number").toIntOrNull()
+                    ?: Regex("""\d+""").findAll(o.optString("name")).lastOrNull()?.value?.toIntOrNull() ?: (out.size + 1)
+                out += n to cmd
+            }
+            val total = js.optString("total_items").toIntOrNull() ?: 0
+            if (out.size >= total) break
+            page++
+        }
+        return out.distinctBy { it.first }.sortedBy { it.first }
     }
 
-    suspend fun vodLink(cmd: String, episode: Int? = null): String {
+    /** The play command of an episode whose files are listed separately: the best-quality video file. */
+    private suspend fun episodeFileCmd(ref: String): String {
+        val (type, movie, season, episode, cat) = ref.removePrefix(EPISODE_PREFIX).split('|').let { it + List(5) { "" } }
+        val js = call(
+            mapOf(
+                "type" to type, "action" to "get_ordered_list", "movie_id" to movie, "season_id" to season,
+                "episode_id" to episode, "category" to cat.ifBlank { "*" }, "sortby" to "added", "p" to "1",
+            )
+        ).optJSONObject("js")
+        val a = js?.optJSONArray("data") ?: JSONArray()
+        val files = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+            .filter { it.optString("cmd").let { c -> c.isNotBlank() && c != "null" } && it.optString("file_type", "video") == "video" }
+        val best = files.maxByOrNull { it.optString("quality").toIntOrNull() ?: 0 }
+            ?: throw PortalException("The portal has no video file for this episode")
+        return best.optString("cmd")
+    }
+
+    suspend fun vodLink(cmd0: String, episode: Int? = null): String {
+        val cmd = if (cmd0.startsWith(EPISODE_PREFIX)) episodeFileCmd(cmd0) else cmd0
         val js = call(
             mapOf(
                 "type" to "vod", "action" to "create_link", "cmd" to cmd, "series" to (episode?.toString() ?: ""),
@@ -431,6 +464,8 @@ class StalkerClient(val profile: Profile) {
     companion object {
         /** Marks a Series-tab category that really lives in the portal's VOD section. */
         const val VOD_PREFIX = "vod:"
+        /** An episode whose video file is fetched at play time: "episode:type|movie|season|episode|category". */
+        const val EPISODE_PREFIX = "episode:"
 
         private val SHOW_WORDS = Regex("""\b(tv ?shows?|web ?series|series|serials?|dramas|seasons?|shows|novelas?|dizi)\b""", RegexOption.IGNORE_CASE)
         fun isShowCategory(title: String) = SHOW_WORDS.containsMatchIn(title)

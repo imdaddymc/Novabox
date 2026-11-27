@@ -186,7 +186,7 @@ private fun VodGrid(vm: AppViewModel, kind: VodKind, cat: String, favs: List<Vod
             PosterCard(
                 title = item.name,
                 poster = item.poster,
-                subtitle = listOf(item.year, item.rating.takeIf { it.isNotBlank() }?.let { "★ $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString(" · "),
+                subtitle = listOf(item.year, item.rating.takeIf { it.isNotBlank() && it.toDoubleOrNull() != 0.0 }?.let { "★ $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString(" · "),
                 onClick = { list.lastOpened = index; vm.openDetails(item) },
                 favorite = favs.any { it.id == item.id && it.kind == item.kind },
                 modifier = if (index == list.lastOpened) Modifier.focusRequester(restore) else Modifier,
@@ -218,22 +218,24 @@ fun DetailsScreen(vm: AppViewModel, item: VodItem, onPlay: (PlayRequest) -> Unit
             }
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 item {
-                    Text(item.name, fontSize = 40.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    // Kept short so the title, info and buttons always fit on screen together.
+                    Text(item.name, fontSize = 34.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(item.year, item.rating.takeIf { it.isNotBlank() }?.let { "IMDb $it" } ?: "", item.duration, item.genres)
+                        listOf(item.year, item.rating.takeIf { it.isNotBlank() && it.toDoubleOrNull() != 0.0 }?.let { "IMDb $it" } ?: "", item.duration,
+                            item.genres.let { g -> if (g.length > 40) g.take(38).substringBeforeLast(',') + "…" else g })
                             .filter { it.isNotBlank() }.forEach { Chip(it) }
                         if (film?.watched == true) Chip("✓ Watched")
                     }
                 }
                 if (item.description.isNotBlank()) item {
-                    Text(item.description, fontSize = 16.sp, color = Palette.text.copy(alpha = 0.85f), maxLines = 6, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.85f))
+                    Text(item.description, fontSize = 16.sp, color = Palette.text.copy(alpha = 0.85f), maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.85f))
                 }
                 if (item.director.isNotBlank() || item.actors.isNotBlank()) item {
                     Column {
-                        if (item.director.isNotBlank()) Text("Director: ${item.director}", fontSize = 14.sp, color = Palette.muted)
-                        if (item.actors.isNotBlank()) Text("Cast: ${item.actors}", fontSize = 14.sp, color = Palette.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (item.director.isNotBlank()) Text("Director: ${item.director}", fontSize = 14.sp, color = Palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (item.actors.isNotBlank()) Text("Cast: ${item.actors}", fontSize = 14.sp, color = Palette.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 item {

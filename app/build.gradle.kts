@@ -13,8 +13,8 @@ android {
         applicationId = "com.novabox.tv"
         minSdk = 23
         targetSdk = 35
-        versionCode = 14
-        versionName = "1.4.7"
+        versionCode = 15
+        versionName = "1.4.8"
     }
 
     // Every NovaBox build must be signed with the same key, or Android refuses to

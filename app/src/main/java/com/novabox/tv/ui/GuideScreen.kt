@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,17 @@ data class GuideCell(val entry: EpgEntry?, val start: Long, val end: Long)
 
 internal fun floorHalfHour(t: Long) = t - Math.floorMod(t, HALF_HOUR)
 internal fun ceilHalfHour(t: Long) = floorHalfHour(t + HALF_HOUR - 1)
+
+/**
+ * The time ▲ ▼ keep to after focusing [cell]: null ("whatever is on now") for the programme on
+ * now, else the cell's start (or the window's left edge for a programme that began earlier).
+ */
+internal fun guideAnchor(cell: GuideCell, now: Long, windowStart: Long): Long? =
+    if (now >= cell.start && now < cell.end) null else maxOf(cell.start, windowStart)
+
+/** The time to focus in the next row: now (kept on screen), or the anchored time. */
+internal fun guideTarget(anchor: Long?, now: Long, windowStart: Long): Long =
+    anchor ?: now.coerceIn(windowStart, windowStart + GUIDE_SPAN - 1)
 
 /**
  * Where the guide's window should move when the clock ticks from [before] to [now]: to the new
@@ -122,6 +134,10 @@ fun TvGuide(
     // After the window moves: which row and time should get focus.
     var focusWant by remember { mutableStateOf<Pair<String, Long>?>(null) }
     var info by remember { mutableStateOf<Pair<Channel, GuideCell>?>(null) }
+    // The time ▲ ▼ aim for in the next row: "now" (null) until you move along the row.
+    var anchor by remember { mutableStateOf<Long?>(null) }
+    var movingVertically by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     // The guide follows the clock: unless you have moved it to other times, it starts at the
     // current half hour and moves on by itself as time passes.
     fun tick(force: Boolean = false) {
@@ -190,7 +206,24 @@ fun TvGuide(
                                                 Modifier.offset(x = x(cell.start)).width(x(cell.end) - x(cell.start)).fillMaxHeight()
                                                     .then(if (cell === entryCell) Modifier.focusRequester(entry) else Modifier),
                                                 wantFocus = focusWant?.let { (id, t) -> id == c.id && t >= cell.start && t < cell.end } == true,
-                                                onFocused = { focusWant = null; info = c to cell },
+                                                onFocused = {
+                                                    focusWant = null; info = c to cell
+                                                    // ◀ ▶ (or a time jump) sets the time that ▲ ▼ keep to; ▲ ▼ themselves don't.
+                                                    if (!movingVertically) anchor = guideAnchor(cell, System.currentTimeMillis(), windowStart)
+                                                    movingVertically = false
+                                                },
+                                                onVertical = { step ->
+                                                    val next = channels.getOrNull(index + step) ?: return@GuideCellBox false
+                                                    movingVertically = true
+                                                    focusWant = next.id to guideTarget(anchor, System.currentTimeMillis(), windowStart)
+                                                    // Keep the row on screen; its cell takes focus once it's there.
+                                                    val visible = listState.layoutInfo.visibleItemsInfo
+                                                    val first = visible.firstOrNull()?.index ?: 0
+                                                    val last = visible.lastOrNull { it.offset + it.size <= listState.layoutInfo.viewportEndOffset }?.index ?: first
+                                                    if (index + step < first) scope.launch { listState.animateScrollToItem(index + step) }
+                                                    else if (index + step > last) scope.launch { listState.animateScrollToItem((first + (index + step - last)).coerceAtLeast(0)) }
+                                                    true
+                                                },
                                                 onEdge = { forward ->
                                                     val move = guideShift(cell, windowStart, System.currentTimeMillis(), forward)
                                                     if (move != null) { windowStart = move.first; focusWant = c.id to move.second }
@@ -242,6 +275,7 @@ private fun GuideDetail(info: Pair<Channel, GuideCell>?, fmt: java.text.SimpleDa
 private fun GuideCellBox(
     cell: GuideCell, loading: Boolean, now: Long, fmt: java.text.SimpleDateFormat, modifier: Modifier,
     wantFocus: Boolean, onFocused: () -> Unit, onEdge: (forward: Boolean) -> Boolean, onClick: () -> Unit,
+    onVertical: (step: Int) -> Boolean = { false },
 ) {
     val fr = remember { FocusRequester() }
     LaunchedEffect(wantFocus) { if (wantFocus) { kotlinx.coroutines.delay(30); runCatching { fr.requestFocus() } } }
@@ -258,6 +292,8 @@ private fun GuideCellBox(
             when (k.key) {
                 Key.DirectionRight -> onEdge(true)
                 Key.DirectionLeft -> onEdge(false)
+                Key.DirectionUp -> onVertical(-1)
+                Key.DirectionDown -> onVertical(1)
                 else -> false
             }
         },

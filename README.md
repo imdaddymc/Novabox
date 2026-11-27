@@ -13,7 +13,7 @@ the red, green, yellow or blue buttons.
   MAG520), firmware, image and hardware version, user agent, screen resolution, MAC address, serial number,
   device IDs and signature. Empty fields show the value NovaBox will use. Plus optional portal login/password and time zone
 - Live TV with categories, channel logos and a programme guide (now/next with progress)
-- **TV guide**: a grid of channels against time (Live TV → TV guide). It follows the clock and snaps to now when you come back. Move through the next hours and press OK to watch
+- **TV guide**: a grid of channels against time (Live TV → TV guide). It follows the clock and snaps to now when you come back. ▲ ▼ land on what's on now in the next channel (or the same time, after ◀ ▶ to a later show). Move through the next hours and press OK to watch
 - **Recent channels** category, and **Back to …** in the live menu (or the remote's last-channel key) to jump to the previous channel
 - **Continue watching**: films and episodes pick up where you stopped (saved on the TV, no extra data). Watched episodes get a ✓ and the show offers the next one
 - **Long shows**: every episode is listed, even for daily shows with hundreds of episodes. Long seasons open near the episode you last watched, or at the newest ones

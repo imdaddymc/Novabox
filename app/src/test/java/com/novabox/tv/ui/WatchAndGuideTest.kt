@@ -105,4 +105,17 @@ class WatchAndGuideTest {
         assertNull(followClock(later, t0 + 25 * min, t0 + 31 * min))   // stays where you put it
         assertEquals(t0 + 30 * min, followClock(later, t0 + 25 * min, t0 + 31 * min, force = true)) // app reopened
     }
+
+    @Test fun upDownKeepToNowOrTheChosenTime() {
+        val now = t0 + 40 * min
+        val live = GuideCell(null, t0 + 30 * min, t0 + 60 * min)
+        val later = GuideCell(null, t0 + 90 * min, t0 + 120 * min)
+        val earlier = GuideCell(null, t0 - 60 * min, t0 + 30 * min)
+        assertNull(guideAnchor(live, now, t0))                          // on now: follow now
+        assertEquals(t0 + 90 * min, guideAnchor(later, now, t0))        // a later show: its start
+        assertEquals(t0, guideAnchor(earlier, now, t0))                 // began before the window
+        assertEquals(now, guideTarget(null, now, t0))                   // ▼ lands on what's on now
+        assertEquals(t0 + 90 * min, guideTarget(t0 + 90 * min, now, t0))
+        assertEquals(t0 + 60 * min, guideTarget(null, now, t0 + 60 * min)) // window moved past now
+    }
 }

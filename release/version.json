@@ -1,6 +1,6 @@
 {
-  "versionCode": 14,
-  "versionName": "1.4.7",
-  "notes": "The TV guide now follows the clock: it starts at the current time, moves on by itself, and snaps back to now when you return to the app.",
+  "versionCode": 15,
+  "versionName": "1.4.8",
+  "notes": "TV guide: up and down now land on what's on now in the next channel (or the same time, if you've moved along to a later show), and the list scrolls to keep it in view.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

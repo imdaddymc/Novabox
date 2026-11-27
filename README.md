@@ -16,6 +16,7 @@ the red, green, yellow or blue buttons.
 - **TV guide**: a grid of channels against time (Live TV → TV guide). Move through the next hours and press OK to watch
 - **Recent channels** category, and **Back to …** in the live menu (or the remote's last-channel key) to jump to the previous channel
 - **Continue watching**: films and episodes pick up where you stopped (saved on the TV, no extra data). Watched episodes get a ✓ and the show offers the next one
+- **Long shows**: every episode is listed, even for daily shows with hundreds of episodes. Long seasons open near the episode you last watched, or at the newest ones
 - **Episode lengths** on each episode button: the portal's length when it sends one, else the length once played, else the show's usual length (marked ~). Debrid episodes show it once played
 - **Autoplay**: when a portal episode ends, the next one (or the next season's first) starts after a 10-second "Up next". Press Cancel to stop
 - **Audio and Subtitles** buttons in the player; the language you pick is remembered for the next videos
@@ -95,7 +96,7 @@ If Real-Debrid refuses a link while the VPN is on, try a different Surfshark loc
 | Search | Choose the **Search** tab, press OK on the search box and type with the on-screen keyboard |
 | Back | Inside a page, jumps back to the tab bar. On the tab bar, exits the app |
 | Live player | ▲ ▼ change channel · ◀ channel list · OK menu (Favourite, Channel list, Previous, Next, Exit) · Back closes the menu or the player |
-| Film player | OK shows the icon controls (back 10s, play/pause, forward 30s, start over, audio, subtitles, and exit on the far right; the focused one shows its name) · ◀ ▶ skip back 10s / forward 30s · ▲ from the buttons reaches the progress bar: ◀ ▶ scrub (hold to go faster), the time you'll jump to shows above the bar, OK jumps there (or it jumps when you stop) · Back hides the controls, then closes the player |
+| Film player | OK shows the icon controls (back 10s, play/pause, forward 30s, start over, audio, subtitles, and exit on the far right; the focused one shows its name) · ◀ ▶ skip back 10s / forward 30s · ▲ from the buttons reaches the progress bar: ◀ ▶ scrub (hold to go faster), the time you'll jump to shows above the bar, OK jumps there (or it jumps when you stop), Back cancels · Back hides the controls, then closes the player |
 
 ## Install on Google TV (sideload)
 

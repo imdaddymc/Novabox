@@ -120,7 +120,7 @@ private fun ErrorScreen(vm: AppViewModel, message: String) {
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            "Details: " + message.lineSequence().drop(if (summary == message.lineSequence().first()) 1 else 0).joinToString(" ").ifBlank { message },
+            "Details: " + message.lineSequence().drop(if (summary == message.lineSequence().first()) 1 else 0).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { message },
             color = Palette.muted, fontSize = 13.sp, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(32.dp))

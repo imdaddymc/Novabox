@@ -87,4 +87,12 @@ class WatchAndGuideTest {
         assertEquals("1 h 5 min", formatMinutes(65))
         assertEquals("2 h", formatMinutes(120))
     }
+
+    @Test fun longSeasonsStartNearWhereYouAre() {
+        val eps = (1..739).toList()
+        assertEquals(735, episodeStartIndex(eps) { null })                      // daily show: newest episodes
+        assertEquals(0, episodeStartIndex((1..20).toList()) { null })           // normal season: from the start
+        val w = { ep: Int, at: Long -> WatchEntry("e:1:2:$ep", "S", "", "", "", ep, false, 0, 1, at, false, null) }
+        assertEquals(98, episodeStartIndex(eps) { ep -> when (ep) { 50 -> w(50, 1); 100 -> w(100, 5); else -> null } })
+    }
 }

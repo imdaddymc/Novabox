@@ -655,6 +655,8 @@ class PlayerActivity : ComponentActivity() {
                         if (!it.isFocused) target?.let { t -> onSeekTo(t); target = null }
                     }
                     .onPreviewKeyEvent { e ->
+                        // Back while scrubbing drops the new spot and stays where playback is.
+                        if (e.key == Key.Back && target != null) { if (e.type == KeyEventType.KeyUp) target = null; return@onPreviewKeyEvent true }
                         if (e.type != KeyEventType.KeyDown || duration <= 0) return@onPreviewKeyEvent false
                         val dir = when (e.key) {
                             Key.DirectionLeft -> -1

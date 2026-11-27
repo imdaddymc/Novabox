@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -120,7 +121,7 @@ private val seasonCache = java.util.concurrent.ConcurrentHashMap<String, List<Se
 
 /** Finds the episode after [ep] of [seasonId] (or the next season's first) once the current one nears its end. */
 fun portalNext(item: VodItem, seasonId: String, ep: Int): suspend (String) -> PlayRequest.Vod? = { _ ->
-    val seasons = seasonCache[item.id] ?: AppGraph.client?.seasons(item)?.also { if (it.isNotEmpty()) seasonCache[item.id] = it }.orEmpty()
+    val seasons = seasonCache[cacheKey(item)] ?: AppGraph.client?.seasons(item)?.also { if (it.isNotEmpty()) seasonCache[cacheKey(item)] = it }.orEmpty()
     val si = seasons.indexOfFirst { it.id == seasonId }
     val s = seasons.getOrNull(si)
     val ei = s?.episodes?.indexOf(ep) ?: -1
@@ -132,7 +133,10 @@ fun portalNext(item: VodItem, seasonId: String, ep: Int): suspend (String) -> Pl
 }
 
 /** Remembers seasons shown on a details page for [portalNext]. */
-fun rememberSeasons(item: VodItem, seasons: List<Season>) { if (seasons.isNotEmpty()) seasonCache[item.id] = seasons }
+fun rememberSeasons(item: VodItem, seasons: List<Season>) { if (seasons.isNotEmpty()) seasonCache[cacheKey(item)] = seasons }
+
+/** Ids are only unique within one portal, so the cache is keyed by the connection too. */
+private fun cacheKey(item: VodItem) = "${System.identityHashCode(AppGraph.client)}:${item.id}"
 
 fun filmRequest(item: VodItem, startAtMs: Long? = null) =
     PlayRequest.Vod(item.name, item.cmd, null, key = WatchEntry.filmKey(item), poster = item.poster, item = item, startAtMs = startAtMs)
@@ -140,6 +144,19 @@ fun filmRequest(item: VodItem, startAtMs: Long? = null) =
 fun episodeRequest(item: VodItem, season: Season, ep: Int, startAtMs: Long? = null) =
     PlayRequest.Vod(item.name, season.cmdFor(ep), ep, "${season.name} · Episode $ep", key = WatchEntry.episodeKey(item, season, ep), poster = item.poster, item = item, startAtMs = startAtMs,
         next = portalNext(item, season.id, ep))
+
+/**
+ * Where a season's episode row starts: a little before the most recently watched episode, or at the
+ * newest episode of a very long season (daily shows) that hasn't been watched yet.
+ */
+internal fun episodeStartIndex(episodes: List<Int>, entry: (Int) -> WatchEntry?): Int {
+    val recent = episodes.withIndex().mapNotNull { (i, ep) -> entry(ep)?.let { i to it.updatedAt } }.maxByOrNull { it.second }?.first
+    return when {
+        recent != null -> (recent - 1).coerceAtLeast(0)
+        episodes.size > 100 -> (episodes.size - 4).coerceAtLeast(0)
+        else -> 0
+    }
+}
 
 /**
  * An episode's length for its button: the portal's own figure, else the length measured when it
@@ -282,7 +299,7 @@ fun DetailsScreen(vm: AppViewModel, item: VodItem, onPlay: (PlayRequest) -> Unit
                         if (item.kind == VodKind.MOVIE) {
                             if (film?.inProgress == true) {
                                 NovaButton("Resume · ${timeLeft(film)}", { onPlay(filmRequest(item)) }, Modifier.focusRequester(playFocus), icon = Icons.Filled.PlayArrow, primary = true)
-                                NovaButton("Play from start", { onPlay(filmRequest(item, startAtMs = 0)) })
+                                NovaButton("Start over", { onPlay(filmRequest(item, startAtMs = 0)) })
                             } else {
                                 NovaButton("Play", { onPlay(filmRequest(item)) }, Modifier.focusRequester(playFocus), icon = Icons.Filled.PlayArrow, primary = true)
                             }
@@ -290,11 +307,13 @@ fun DetailsScreen(vm: AppViewModel, item: VodItem, onPlay: (PlayRequest) -> Unit
                         if (next != null) {
                             NovaButton(next.second, { onPlay(next.first) }, Modifier.focusRequester(playFocus), icon = Icons.Filled.PlayArrow, primary = true)
                         }
+                        // A film you're partway through has four buttons; the favourite heart drops its words so they fit.
+                        val compactFav = item.kind == VodKind.MOVIE && film?.inProgress == true
                         NovaButton(
-                            if (isFav) "Remove favourite" else "Add to favourites",
+                            if (compactFav) "" else if (isFav) "Remove favourite" else "Add to favourites",
                             { AppGraph.favorites.toggle(item) },
                             if (item.kind == VodKind.SERIES && next == null) Modifier.focusRequester(playFocus) else Modifier,
-                            icon = Icons.Filled.Favorite, tint = if (isFav) Palette.heart else null,
+                            icon = if (compactFav && !isFav) Icons.Filled.FavoriteBorder else Icons.Filled.Favorite, tint = if (isFav) Palette.heart else null,
                         )
                         NovaButton("Back", { vm.pop() })
                     }
@@ -322,7 +341,12 @@ fun DetailsScreen(vm: AppViewModel, item: VodItem, onPlay: (PlayRequest) -> Unit
                         item {
                             Column {
                                 SectionTitle("EPISODES")
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(4.dp)) {
+                                // Long seasons open where you left off, or at the newest episode for long daily
+                                // shows, instead of making you scroll from episode 1.
+                                val epState = remember(item.id, season.id) {
+                                    androidx.compose.foundation.lazy.LazyListState(firstVisibleItemIndex = episodeStartIndex(season.episodes) { ep -> watch[WatchEntry.episodeKey(item, season, ep)] })
+                                }
+                                LazyRow(state = epState, horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(4.dp)) {
                                     items(season.episodes) { ep ->
                                         val w = watch[WatchEntry.episodeKey(item, season, ep)]
                                         FocusSurface(

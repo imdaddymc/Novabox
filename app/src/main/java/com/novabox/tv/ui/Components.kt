@@ -148,14 +148,15 @@ fun NovaButton(
         focusedScale = 1.08f,
     ) { focused ->
         Row(
-            Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+            // An empty text makes a round icon-only button.
+            Modifier.padding(horizontal = if (text.isEmpty()) 14.dp else 22.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
                 Icon(icon, null, Modifier.size(20.dp), tint = if (!focused && tint != null) tint else LocalContentColor.current)
-                Spacer(Modifier.width(10.dp))
+                if (text.isNotEmpty()) Spacer(Modifier.width(10.dp))
             }
-            Text(text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, softWrap = false)
+            if (text.isNotEmpty()) Text(text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, softWrap = false)
         }
     }
 }

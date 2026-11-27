@@ -1,6 +1,6 @@
 {
-  "versionCode": 11,
-  "versionName": "1.4.4",
-  "notes": "Scrub through a video: press up from the player buttons to the progress bar, then hold left or right (it speeds up), and OK jumps there. The exit button sits on the far right. Episode buttons show each episode's length.",
+  "versionCode": 12,
+  "versionName": "1.4.5",
+  "notes": "Fixes from a debugging pass: long daily shows now list every episode (some have over 700), and long seasons open near the newest or last-watched episode. Back while scrubbing cancels the jump. A half-watched film's buttons now all fit on screen.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

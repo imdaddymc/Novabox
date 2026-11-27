@@ -1,6 +1,9 @@
 package com.novabox.tv.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -391,33 +394,44 @@ class StalkerClient(val profile: Profile) {
 
     /** Episodes listed one by one under a season: (episode number, play command). */
     private suspend fun episodesOf(type: String, item: VodItem, seasonId: String, minutes: MutableMap<Int, Int> = mutableMapOf()): List<Pair<Int, String>> {
-        val out = mutableListOf<Pair<Int, String>>()
-        var page = 1
-        // Portals send 14 episodes a page; long-running dramas need several pages.
-        while (page <= 20) {
-            val js = call(
-                mapOf(
-                    "type" to type, "action" to "get_ordered_list", "movie_id" to item.id, "season_id" to seasonId,
-                    "episode_id" to "0", "category" to item.categoryId.removePrefix(VOD_PREFIX).ifBlank { "*" }, "sortby" to "added", "p" to "$page",
-                )
-            ).optJSONObject("js") ?: break
-            val a = js.optJSONArray("data") ?: break
-            if (a.length() == 0) break
-            for (i in 0 until a.length()) {
-                val o = a.optJSONObject(i) ?: continue
-                // Ministra 5 lists episodes without a play command: the file is one level further down,
-                // fetched when the episode is played (see vodLink).
-                val cmd = o.optString("cmd").takeIf { it.isNotBlank() && it != "null" }
-                    ?: o.optString("id").takeIf { it.isNotBlank() }?.let { "$EPISODE_PREFIX$type|${item.id}|$seasonId|$it|${item.categoryId.removePrefix(VOD_PREFIX)}" }
-                    ?: continue
-                val n = o.optString("series_number").toIntOrNull()
-                    ?: Regex("""\d+""").findAll(o.optString("name")).lastOrNull()?.value?.toIntOrNull() ?: (out.size + 1)
-                out += n to cmd
-                runtimeMinutes(o)?.let { minutes[n] = it }
+        suspend fun page(p: Int): JSONObject? = call(
+            mapOf(
+                "type" to type, "action" to "get_ordered_list", "movie_id" to item.id, "season_id" to seasonId,
+                "episode_id" to "0", "category" to item.categoryId.removePrefix(VOD_PREFIX).ifBlank { "*" }, "sortby" to "added", "p" to "$p",
+            )
+        ).optJSONObject("js")
+
+        // Portals send 14 episodes a page, and daily shows run to hundreds of episodes (one had 739).
+        // The first page gives the total; the rest are fetched a few at a time in parallel.
+        val first = page(1) ?: return emptyList()
+        val rows = mutableListOf<JSONObject>()
+        fun collect(js: JSONObject?) {
+            val a = js?.optJSONArray("data") ?: return
+            for (i in 0 until a.length()) a.optJSONObject(i)?.let { rows += it }
+        }
+        collect(first)
+        val perPage = first.optJSONArray("data")?.length() ?: 0
+        val total = first.optString("total_items").toIntOrNull() ?: 0
+        if (perPage > 0 && total > perPage) {
+            val pages = ((total + perPage - 1) / perPage).coerceAtMost(MAX_EPISODE_PAGES)
+            for (chunk in (2..pages).chunked(6)) {
+                val got = coroutineScope { chunk.map { p -> async { runCatching { page(p) }.getOrNull() } }.awaitAll() }
+                got.forEach { collect(it) }
+                if (got.all { it?.optJSONArray("data")?.length() == 0 }) break
             }
-            val total = js.optString("total_items").toIntOrNull() ?: 0
-            if (out.size >= total) break
-            page++
+        }
+
+        val out = mutableListOf<Pair<Int, String>>()
+        for (o in rows) {
+            // Ministra 5 lists episodes without a play command: the file is one level further down,
+            // fetched when the episode is played (see vodLink).
+            val cmd = o.optString("cmd").takeIf { it.isNotBlank() && it != "null" }
+                ?: o.optString("id").takeIf { it.isNotBlank() }?.let { "$EPISODE_PREFIX$type|${item.id}|$seasonId|$it|${item.categoryId.removePrefix(VOD_PREFIX)}" }
+                ?: continue
+            val n = o.optString("series_number").toIntOrNull()
+                ?: Regex("""\d+""").findAll(o.optString("name")).lastOrNull()?.value?.toIntOrNull() ?: (out.size + 1)
+            out += n to cmd
+            runtimeMinutes(o)?.let { minutes[n] = it }
         }
         return out.distinctBy { it.first }.sortedBy { it.first }
     }
@@ -502,6 +516,8 @@ class StalkerClient(val profile: Profile) {
         fun sha1(s: String) = hash("SHA-1", s)
         fun sha256(s: String) = hash("SHA-256", s)
         /** What a blank serial number or device ID becomes for this MAC (shown in the profile editor too). */
+        /** Up to 1,680 episodes a season (120 pages of 14). */
+        const val MAX_EPISODE_PAGES = 120
         fun defaultSerial(mac: String) = md5(mac.trim().uppercase()).uppercase().take(13)
         fun defaultDeviceId(mac: String) = sha256(mac.trim().uppercase()).uppercase()
     }

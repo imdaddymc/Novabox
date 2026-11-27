@@ -95,4 +95,14 @@ class WatchAndGuideTest {
         val w = { ep: Int, at: Long -> WatchEntry("e:1:2:$ep", "S", "", "", "", ep, false, 0, 1, at, false, null) }
         assertEquals(98, episodeStartIndex(eps) { ep -> when (ep) { 50 -> w(50, 1); 100 -> w(100, 5); else -> null } })
     }
+
+    @Test fun guideFollowsTheClock() {
+        val w = t0                                                     // window at 18:00, opened 18:10
+        assertNull(followClock(w, t0 + 10 * min, t0 + 25 * min))       // same half hour: stay
+        assertEquals(t0 + 30 * min, followClock(w, t0 + 25 * min, t0 + 31 * min))   // 18:31 → 18:30
+        assertEquals(t0 + 120 * min, followClock(w, t0 + 25 * min, t0 + 125 * min)) // back after 2 h
+        val later = t0 + 60 * min                                      // you moved to 19:00
+        assertNull(followClock(later, t0 + 25 * min, t0 + 31 * min))   // stays where you put it
+        assertEquals(t0 + 30 * min, followClock(later, t0 + 25 * min, t0 + 31 * min, force = true)) // app reopened
+    }
 }

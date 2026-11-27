@@ -60,6 +60,17 @@ internal fun floorHalfHour(t: Long) = t - Math.floorMod(t, HALF_HOUR)
 internal fun ceilHalfHour(t: Long) = floorHalfHour(t + HALF_HOUR - 1)
 
 /**
+ * Where the guide's window should move when the clock ticks from [before] to [now]: to the new
+ * current half hour if the window was showing the current time (or [force], on returning to the
+ * app). Null to stay, e.g. while you're looking at other times.
+ */
+internal fun followClock(windowStart: Long, before: Long, now: Long, force: Boolean = false): Long? {
+    val following = windowStart == floorHalfHour(before)
+    val target = floorHalfHour(now)
+    return if ((force || following) && windowStart != target) target else null
+}
+
+/**
  * Lays one channel's programmes out between [from] and [to]: clipped to the window, overlaps
  * trimmed, and gaps of [minGap] or more filled with "no information" cells so every part of
  * the row can be reached with the D-pad. Smaller gaps are absorbed by the next programme.
@@ -107,11 +118,24 @@ fun TvGuide(
 ) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(30_000); now = System.currentTimeMillis() } }
     var windowStart by remember { mutableLongStateOf(floorHalfHour(System.currentTimeMillis())) }
     // After the window moves: which row and time should get focus.
     var focusWant by remember { mutableStateOf<Pair<String, Long>?>(null) }
     var info by remember { mutableStateOf<Pair<Channel, GuideCell>?>(null) }
+    // The guide follows the clock: unless you have moved it to other times, it starts at the
+    // current half hour and moves on by itself as time passes.
+    fun tick(force: Boolean = false) {
+        val t = System.currentTimeMillis()
+        val next = followClock(windowStart, now, t, force)
+        now = t
+        if (next != null) {
+            windowStart = next
+            info?.let { (c, _) -> focusWant = c.id to t }
+        }
+    }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(15_000); tick() } }
+    // Coming back to the app (from the player, the screensaver or another app) snaps to now.
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { tick(force = true); onPauseOrDispose { } }
     val fmt = rememberTimeFormat(showAmPm = false)
     val windowEnd = windowStart + GUIDE_SPAN
 

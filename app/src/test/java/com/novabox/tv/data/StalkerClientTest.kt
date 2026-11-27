@@ -16,6 +16,7 @@ class StalkerClientTest {
     private lateinit var server: MockWebServer
     private val requests = mutableListOf<RecordedRequest>()
     private var expireOnce = false
+    private var messy = false
 
     @Before fun setUp() {
         server = MockWebServer()
@@ -29,6 +30,10 @@ class StalkerClientTest {
                     return MockResponse().setBody("Authorization failed.")
                 }
                 if (expireOnce && action == "get_genres") { expireOnce = false; return MockResponse().setBody("Authorization failed.") }
+                if (messy && action == "get_genres") return MockResponse().setResponseCode(500).setBody("<html>error</html>")
+                if (messy && action == "get_all_channels") return MockResponse().setBody("""{"js":{"total_items":3,"data":[
+                    {"id":"7","name":"A","number":"1","cmd":"a"},{"id":"7","name":"A again","number":"2","cmd":"a2"},
+                    {"id":"","name":"B","number":"3","cmd":"b"},{"id":"","name":"C","number":"4","cmd":"c"}]}}""")
                 val body = when ("$type/$action") {
                     "stb/handshake" -> """{"js":{"token":"TOKEN123","random":"abc"}}"""
                     "stb/get_profile" -> """{"js":{"id":"1","name":"test","status":0}}"""
@@ -100,5 +105,16 @@ class StalkerClientTest {
     @Test fun cleansCommands() {
         assertEquals("http://a/b", StalkerClient.cleanCmd("ffmpeg http://a/b"))
         assertEquals("http://a/b", StalkerClient.cleanCmd("ffrt http://a/b "))
+    }
+
+    /** Real portals send repeated or blank ids; lists keyed by id crash on those, so they must come out unique. */
+    @Test fun messyPortalGivesUniqueIds() = runTest {
+        messy = true
+        val c = client()
+        c.login()
+        val ch = c.allChannels()
+        assertEquals(3, ch.size)
+        assertEquals(ch.size, ch.map { it.id }.toSet().size)
+        assertTrue(runCatching { c.liveGenres() }.isFailure)
     }
 }

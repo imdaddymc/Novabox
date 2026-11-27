@@ -20,6 +20,7 @@ import com.novabox.tv.data.VodItem
 import com.novabox.tv.data.VodKind
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -127,10 +128,15 @@ class AppViewModel : ViewModel() {
             try {
                 c.login()
                 liveLoading = true
-                val g = async { c.liveGenres() }
-                val ch = async { c.allChannels() }
-                genres = runCatching { g.await() }.getOrDefault(emptyList())
-                channels = ch.await()
+                // A failed child of async would cancel this whole coroutine and crash the app, even with
+                // the await wrapped, so each call catches its own errors (portals often fail one of them).
+                val (g, ch) = coroutineScope {
+                    val g = async { runCatching { c.liveGenres() }.getOrDefault(emptyList()) }
+                    val ch = async { runCatching { c.allChannels() } }
+                    g.await() to ch.await()
+                }
+                genres = g
+                channels = ch.getOrElse { e -> if (g.isEmpty()) throw e else emptyList() }
                 AppGraph.channels = channels
                 AppGraph.genres = genres
                 liveLoading = false

@@ -203,7 +203,7 @@ class StalkerClient(val profile: Profile) {
         val js = call(mapOf("type" to "itv", "action" to "get_genres")).optJSONArray("js") ?: JSONArray()
         return (0 until js.length()).mapNotNull { i ->
             js.optJSONObject(i)?.let { Genre(it.optString("id"), it.optString("title").ifBlank { "Unnamed" }) }
-        }.filter { it.id != "*" }
+        }.filter { it.id != "*" && it.id.isNotBlank() }.distinctBy { it.id }
     }
 
     suspend fun allChannels(): List<Channel> {
@@ -216,16 +216,20 @@ class StalkerClient(val profile: Profile) {
         val out = mutableListOf<Channel>()
         var p = 1
         while (p < 200) {
-            val js = call(
-                mapOf("type" to "itv", "action" to "get_ordered_list", "genre" to "*", "force_ch_link_check" to "", "fav" to "0", "sortby" to "number", "hd" to "0", "p" to "$p")
-            ).optJSONObject("js") ?: break
-            val items = parseChannels(js.optJSONArray("data"))
+            val page = runCatching {
+                call(
+                    mapOf("type" to "itv", "action" to "get_ordered_list", "genre" to "*", "force_ch_link_check" to "", "fav" to "0", "sortby" to "number", "hd" to "0", "p" to "$p")
+                )
+            }
+            // Keep the pages already loaded if a later one fails.
+            val js = (if (out.isEmpty()) page.getOrThrow() else page.getOrNull())?.optJSONObject("js") ?: break
+            val items = parseChannels(js.optJSONArray("data")).map { if (it.id.matches(Regex("n\\d+"))) it.copy(id = "p$p-${it.id}") else it }
             out += items
             val total = js.optInt("total_items")
             if (items.isEmpty() || out.size >= total) break
             p++
         }
-        return out
+        return out.distinctBy { it.id }
     }
 
     private fun parseChannels(a: JSONArray?): List<Channel> {
@@ -233,7 +237,8 @@ class StalkerClient(val profile: Profile) {
         return (0 until a.length()).mapNotNull { i ->
             val o = a.optJSONObject(i) ?: return@mapNotNull null
             Channel(
-                id = o.optString("id"),
+                // Lists are keyed by id, and a repeated id would crash them: some portals send blanks or repeats.
+                id = o.optString("id").ifBlank { "n$i" },
                 name = o.optString("name").trim(),
                 number = o.optString("number").toIntOrNull() ?: (i + 1),
                 cmd = o.optString("cmd"),
@@ -241,7 +246,7 @@ class StalkerClient(val profile: Profile) {
                 genreId = o.optString("tv_genre_id"),
                 useTmpLink = o.optString("use_http_tmp_link") == "1",
             )
-        }.sortedBy { it.number }
+        }.distinctBy { it.id }.sortedBy { it.number }
     }
 
     suspend fun shortEpg(channelId: String, size: Int = 10): List<EpgEntry> {
@@ -275,7 +280,7 @@ class StalkerClient(val profile: Profile) {
         val js = call(mapOf("type" to type(kind), "action" to "get_categories")).optJSONArray("js") ?: JSONArray()
         return (0 until js.length()).mapNotNull { i ->
             js.optJSONObject(i)?.let { Genre(it.optString("id"), it.optString("title").ifBlank { "Unnamed" }) }
-        }
+        }.filter { it.id.isNotBlank() }.distinctBy { it.id }
     }
 
     suspend fun vodPage(kind: VodKind, categoryId: String, page: Int, search: String = ""): Page<VodItem> {

@@ -129,7 +129,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 LaunchedEffect(Unit) { while (true) { vm.refreshVpn(); kotlinx.coroutines.delay(5000) } }
                 Text(
                     when {
-                        vm.vpnApp == null -> "Optional. Pick the VPN app you use (like Surfshark) and NovaBox can open it for you. Debrid works with or without a VPN."
+                        vm.vpnApp == null -> "Optional. Pick the VPN app you use (like Surfshark) and Lodestar can open it for you. Debrid works with or without a VPN."
                         vm.vpnOn -> "${vm.vpnApp!!.name} · a VPN is on."
                         else -> "${vm.vpnApp!!.name} · no VPN is on right now."
                     },
@@ -186,7 +186,7 @@ private fun PictureSection() {
     toggle("Sharpen picture", sharpen, "A light sharpen filter for soft, low-quality channels. It can't add detail that isn't in the stream.") {
         sharpen = !sharpen; st.sharpen = sharpen
     }
-    toggle("Skip intro and credits", skip, "After two or three episodes of a show, NovaBox recognises its intro and end credits by their sound. It then offers Skip intro, and the next episode when the credits start. It all stays on this TV.") {
+    toggle("Skip intro and credits", skip, "After two or three episodes of a show, Lodestar recognises its intro and end credits by their sound. It then offers Skip intro, and the next episode when the credits start. It all stays on this TV.") {
         skip = !skip; st.skipIntros = skip
     }
     toggle("Live preview", preview, "A small, silent picture of the channel you're on in the Live TV list. Turn it off if your provider allows only one stream at a time and the full player struggles to start.") {
@@ -199,7 +199,7 @@ private fun UpdatesSection(vm: AppViewModel) {
     val installError by com.novabox.tv.data.Updater.installError.collectAsState()
     LaunchedEffect(installError) { installError?.let { vm.updateInstallFailed(it); com.novabox.tv.data.Updater.installError.value = null } }
     SectionTitle("APP UPDATES")
-    Text("NovaBox ${com.novabox.tv.data.Updater.currentVersion}", fontSize = 14.sp)
+    Text("Lodestar ${com.novabox.tv.data.Updater.currentVersion}", fontSize = 14.sp)
     Spacer(Modifier.height(6.dp))
     val s = vm.update
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -215,9 +215,9 @@ private fun UpdatesSection(vm: AppViewModel) {
         AppViewModel.UpdateState.Checking -> "Checking…"
         AppViewModel.UpdateState.UpToDate -> "You have the latest version."
         is AppViewModel.UpdateState.Available -> "Version ${s.info.versionName} is available." + (if (s.info.notes.isNotBlank()) " ${s.info.notes}" else "")
-        is AppViewModel.UpdateState.NeedsPermission -> "Allow NovaBox to install apps in the screen that opened, then press Back. The update continues by itself."
+        is AppViewModel.UpdateState.NeedsPermission -> "Allow Lodestar to install apps in the screen that opened, then press Back. The update continues by itself."
         is AppViewModel.UpdateState.Downloading -> if (s.progress >= 0) "Downloading… ${(s.progress * 100).toInt()}%" else "Downloading…"
-        is AppViewModel.UpdateState.Installing -> "Choose \"Update\" on the screen Android shows. NovaBox then closes to update; open it again from your apps. Your profiles and favourites are kept."
+        is AppViewModel.UpdateState.Installing -> "Choose \"Update\" on the screen Android shows. Lodestar then closes to update; open it again from your apps. Your profiles and favourites are kept."
         is AppViewModel.UpdateState.Failed -> s.message
     }
     Text(line, fontSize = 13.sp, color = if (s is AppViewModel.UpdateState.Failed) Palette.danger else Palette.muted, maxLines = 4, overflow = TextOverflow.Ellipsis)
@@ -259,9 +259,9 @@ fun UpdateReadyDialog(vm: AppViewModel) {
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(100); runCatching { fr.requestFocus() } }
     androidx.compose.ui.window.Dialog(onDismissRequest = { vm.postponeReadyUpdate() }) {
         Column(Modifier.width(520.dp).background(Palette.bg2, RoundedCornerShape(18.dp)).padding(28.dp)) {
-            Text("NovaBox $version is ready", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Lodestar $version is ready", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            Text("It downloaded automatically. Install it now? NovaBox closes to update; your profiles and favourites are kept.", fontSize = 14.sp, color = Palette.muted)
+            Text("It downloaded automatically. Install it now? Lodestar closes to update; your profiles and favourites are kept.", fontSize = 14.sp, color = Palette.muted)
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = RowGap) {
                 NovaButton("Install now", { vm.installReadyUpdate() }, Modifier.focusRequester(fr), icon = Icons.Filled.Check, primary = true)
@@ -317,7 +317,7 @@ fun VpnPickerDialog(vm: AppViewModel, onDismiss: () -> Unit) {
             Text(
                 if (found == null) "Looking for VPN apps on this TV…"
                 else if (apps.isEmpty()) "No VPN apps are installed on this TV. Install one (for example Surfshark) from the Google Play Store, then come back here."
-                else "NovaBox will open it for you from Settings and the Debrid tab, so you can check it's connected.",
+                else "Lodestar will open it for you from Settings and the Debrid tab, so you can check it's connected.",
                 fontSize = 14.sp, color = Palette.muted,
             )
             Spacer(Modifier.height(16.dp))
@@ -392,7 +392,7 @@ fun ProfileEditScreen(vm: AppViewModel, initial: Profile?, firstRun: Boolean) {
 
     Row(Modifier.fillMaxSize().padding(56.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
         Column(Modifier.width(360.dp)) {
-            Text(if (firstRun) "Welcome to NovaBox" else if (initial == null) "New profile" else "Edit profile", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+            Text(if (firstRun) "Welcome to Lodestar" else if (initial == null) "New profile" else "Edit profile", fontSize = 34.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(12.dp))
             Text(
                 "Enter the portal URL and MAC address your IPTV provider gave you. Use the D-pad to pick a field and press OK to type.",

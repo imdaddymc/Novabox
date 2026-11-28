@@ -85,7 +85,7 @@ private fun DebridLink(vm: AppViewModel) {
         Text("Link your Real-Debrid account", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))
         Text(
-            "NovaBox plays what is already in your Real-Debrid account. You link it with a code, so no password is typed on the TV.",
+            "Lodestar plays what is already in your Real-Debrid account. You link it with a code, so no password is typed on the TV.",
             color = Palette.muted, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.width(640.dp),
         )

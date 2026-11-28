@@ -99,10 +99,11 @@ fun HomeScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () -> Un
             Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, top = 22.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.size(38.dp).background(Palette.accent, RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center,
-            ) { Text("N", fontSize = 22.sp, fontWeight = FontWeight.Black, color = androidx.compose.ui.graphics.Color.White) }
+            androidx.compose.foundation.Image(
+                androidx.compose.ui.res.painterResource(com.novabox.tv.R.drawable.ic_lodestar_tile),
+                contentDescription = "Lodestar",
+                modifier = Modifier.size(40.dp),
+            )
             Spacer(Modifier.width(12.dp))
             Row(
                 Modifier.weight(1f).onFocusChanged { tabsFocused = it.hasFocus }

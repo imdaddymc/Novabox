@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -81,7 +82,13 @@ private fun AppRoot(vm: AppViewModel, onPlay: (PlayRequest) -> Unit, onExit: () 
 @Composable
 private fun Connecting(vm: AppViewModel) {
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
-        Text("NovaBox", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Palette.text)
+        androidx.compose.foundation.Image(
+            androidx.compose.ui.res.painterResource(com.novabox.tv.R.drawable.ic_lodestar_tile),
+            contentDescription = null,
+            modifier = Modifier.size(96.dp),
+        )
+        Spacer(Modifier.height(20.dp))
+        Text("Lodestar", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Palette.text)
         Spacer(Modifier.height(16.dp))
         Text(
             "Connecting to ${vm.activeProfile?.name?.ifBlank { null } ?: vm.activeProfile?.portalUrl ?: "portal"}…",

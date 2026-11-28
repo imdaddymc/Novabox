@@ -689,7 +689,7 @@ class PlayerActivity : ComponentActivity() {
         ) {
             Text(if (type == C.TRACK_TYPE_AUDIO) "Audio" else "Subtitles", fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Text(
-                if (type == C.TRACK_TYPE_AUDIO) "NovaBox picks this language first next time." else "Your choice is used for the next videos too.",
+                if (type == C.TRACK_TYPE_AUDIO) "Lodestar picks this language first next time." else "Your choice is used for the next videos too.",
                 fontSize = 13.sp, color = Palette.muted,
             )
             Spacer(Modifier.height(14.dp))

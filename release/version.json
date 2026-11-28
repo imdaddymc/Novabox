@@ -1,6 +1,6 @@
 {
-  "versionCode": 17,
-  "versionName": "1.5.1",
-  "notes": "Live TV: a small live preview of the channel you're on, a narrower category list once you pick one, real channel logos, and Remove from Recent. Fixes: the quality tag shows again on every channel, OK no longer favourites a channel in the player, a tidier player menu, and remembered audio language within a session. Hold OK to remove a title from Continue watching.",
+  "versionCode": 18,
+  "versionName": "1.5.2",
+  "notes": "NovaBox is now Lodestar: a new name and a gold compass-star logo on the home screen, the TV banner and the top bar. Your profiles, favourites and settings stay as they are. Also fixes channel initials showing behind real channel logos.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

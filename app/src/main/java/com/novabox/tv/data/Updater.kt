@@ -95,7 +95,7 @@ object Updater {
         @Suppress("DEPRECATION")
         val pkg = context.packageManager.getPackageArchiveInfo(out.path, 0)
             ?: throw IOException("the downloaded file isn't a valid app")
-        if (pkg.packageName != context.packageName) throw IOException("the downloaded file isn't NovaBox")
+        if (pkg.packageName != context.packageName) throw IOException("the downloaded file isn't Lodestar")
         @Suppress("DEPRECATION")
         val code = if (Build.VERSION.SDK_INT >= 28) pkg.longVersionCode.toInt() else pkg.versionCode
         if (code <= BuildConfig.VERSION_CODE) throw IOException("the downloaded file isn't newer than this version")

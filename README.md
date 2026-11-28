@@ -1,4 +1,8 @@
-# NovaBox
+# Lodestar
+
+![Lodestar](docs/lodestar-banner.png)
+
+*Formerly NovaBox. Since 1.5.2 the app is called Lodestar; it is the same app and updates in place.*
 
 An IPTV portal player for Android TV and Google TV. It logs in to Stalker / Ministra
 middleware portals with a MAC address (the same kind of portal MAG set-top boxes and

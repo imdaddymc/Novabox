@@ -134,6 +134,7 @@ class AppViewModel : ViewModel() {
         if (saved != null) {
             genres = saved.genres; channels = saved.channels
             AppGraph.channels = channels; AppGraph.genres = genres
+            findLogos()
             if (saved.movieCategories.isNotEmpty()) { categories[VodKind.MOVIE] = saved.movieCategories; selectDefaultCategory(VodKind.MOVIE) }
             if (saved.seriesCategories.isNotEmpty()) { categories[VodKind.SERIES] = saved.seriesCategories; selectDefaultCategory(VodKind.SERIES) }
             backStack.clear()
@@ -158,6 +159,7 @@ class AppViewModel : ViewModel() {
                     AppGraph.channels = channels
                     AppGraph.genres = genres
                     saveLists()
+                    findLogos()
                 }
                 liveLoading = false
                 if (saved == null) {
@@ -171,7 +173,7 @@ class AppViewModel : ViewModel() {
                 liveLoading = false
                 // With saved lists showing, only a refusal by the portal (MAC not accepted) leaves them;
                 // a network hiccup just says so, and playing a channel tries the portal again.
-                if (saved != null && e !is StalkerClient.PortalSays) {
+                if (saved != null && e !is com.novabox.tv.data.PortalRefused) {
                     showToast("Couldn't reach the portal. Showing your saved lists.")
                 } else {
                     backStack.clear()
@@ -252,6 +254,12 @@ class AppViewModel : ViewModel() {
         if (selectedCategory[kind] == null || cats.none { it.id == selectedCategory[kind] }) {
             selectedCategory[kind] = cats.firstOrNull { it.id == "*" }?.id ?: cats.firstOrNull()?.id ?: "*"
         }
+    }
+
+    /** Logos for channels the portal sends none for (see Logos). */
+    private fun findLogos() {
+        val ch = channels; val g = genres
+        viewModelScope.launch { com.novabox.tv.data.Logos.prepare(ch, g) }
     }
 
     /** Saves the current lists for the next start (off the main thread). */

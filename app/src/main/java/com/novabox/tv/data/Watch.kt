@@ -105,6 +105,17 @@ class WatchStore(context: Context) {
         persist()
     }
 
+    /**
+     * Takes [key] out of "Continue watching" (and, for a show, its other part-watched episodes),
+     * keeping which episodes were watched.
+     */
+    fun dismiss(key: String) {
+        val e = _entries.value[key] ?: return
+        val same = _entries.value.values.filter { it.key == key || (e.item != null && it.item?.id == e.item.id && it.inProgress) }
+        _entries.value = _entries.value + same.associate { it.key to it.copy(positionMs = 0) }
+        persist()
+    }
+
     /** Started but not finished, newest first. */
     fun continueWatching(): List<WatchEntry> = _entries.value.values.filter { it.inProgress }.sortedByDescending { it.updatedAt }
 
@@ -128,6 +139,12 @@ class RecentChannelsStore(context: Context) {
 
     fun add(c: Channel) {
         val list = (listOf(c) + _channels.value.filterNot { it.id == c.id }).take(MAX)
+        _channels.value = list
+        if (profileId.isNotEmpty()) prefs.edit().putString("r_$profileId", JSONArray(list.map { it.toJson() }).toString()).apply()
+    }
+
+    fun remove(id: String) {
+        val list = _channels.value.filterNot { it.id == id }
         _channels.value = list
         if (profileId.isNotEmpty()) prefs.edit().putString("r_$profileId", JSONArray(list.map { it.toJson() }).toString()).apply()
     }

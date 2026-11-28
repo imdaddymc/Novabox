@@ -12,10 +12,11 @@ the red, green, yellow or blue buttons.
 - Several portal profiles, each with its own **STB settings** laid out like a MAG box: STB model (MAG250 to
   MAG520), firmware, image and hardware version, user agent, screen resolution, MAC address, serial number,
   device IDs and signature. Empty fields show the value NovaBox will use. Plus optional portal login/password and time zone
-- Live TV with categories, channel logos and a programme guide (now/next with progress)
+- Live TV with categories, channel logos and a programme guide (now/next with progress). Once you move to the channels, the category list narrows to give them room, and a small, silent **live preview** of the channel you're on plays in the details panel (Settings → Picture and playback → Live preview turns it off)
+- **Real channel logos**: when the portal sends none, NovaBox looks the channel's name up in a public logo list (iptv-org, about 0.5 MB, refreshed monthly) and falls back to the initials when nothing fits
 - **TV guide**: a grid of channels against time (Live TV → TV guide). It follows the clock and snaps to now when you come back. ▲ ▼ land on what's on now in the next channel (or the same time, after ◀ ▶ to a later show). Move through the next hours and press OK to watch
-- **Recent channels** category, and **Back to …** in the live menu (or the remote's last-channel key) to jump to the previous channel
-- **Continue watching**: films and episodes pick up where you stopped (saved on the TV, no extra data). Watched episodes get a ✓ and the show offers the next one
+- **Recent channels** category (hold OK on a channel, or use **Remove from Recent**, to take it off), and **Back to …** in the live menu (or the remote's last-channel key) to jump to the previous channel
+- **Continue watching**: films and episodes pick up where you stopped (saved on the TV, no extra data). Hold OK on a title to remove it from the list. Watched episodes get a ✓ and the show offers the next one
 - **Long shows**: every episode is listed, even for daily shows with hundreds of episodes. Long seasons open near the episode you last watched, or at the newest ones
 - **Episode lengths** on each episode button: the portal's length when it sends one, else the length once played, else the show's usual length (marked ~). Debrid episodes show it once played
 - **Autoplay**: when a portal episode ends, the next one (or the next season's first) starts after a 10-second "Up next". Press Cancel to stop
@@ -74,6 +75,7 @@ the red, green, yellow or blue buttons.
 | ![Icon tabs](docs/screenshots/31-icon-tabs.png) Icon tabs: the one you are on shows its name | ![Player](docs/screenshots/32-player-icons.png) Player buttons as icons |
 | ![Continue an episode](docs/screenshots/33-continue-episode.png) Continue watching picks up the episode | ![Episode lengths](docs/screenshots/34-episode-lengths.png) Episode lengths on the buttons |
 | ![Scrubbing](docs/screenshots/35-scrub-bar.png) Scrub along the progress bar; exit sits on the far right | ![Skip intro](docs/screenshots/36-skip-intro.png) Skip intro, learned from the show's sound |
+| ![Live preview](docs/screenshots/37-live-preview-recent.png) Live preview, narrow categories and Remove from Recent | |
 
 ## Using Surfshark with NovaBox
 
@@ -94,10 +96,10 @@ If Real-Debrid refuses a link while the VPN is on, try a different Surfshark loc
 | Where | How |
 |---|---|
 | Top tab bar | Icons for Live TV · Free TV · Movies · Series · Favourites · Search · (Debrid) · Settings. The tab you move onto opens up to show its name. Move with ◀ ▶, then ▼ into the page |
-| Add a favourite | The ♥ button next to each channel, the **Favourite** button on a channel's panel, a film's or series' page, or in the player menu |
+| Add a favourite | The **Favourite** button on a channel's panel (▶ from the list), a film's or series' page, or in the player menu. A ♥ marks favourites in the lists |
 | Search | Choose the **Search** tab, press OK on the search box and type with the on-screen keyboard |
 | Back | Inside a page, jumps back to the tab bar. On the tab bar, exits the app |
-| Live player | ▲ ▼ change channel · ◀ channel list · OK menu (Favourite, Channel list, Previous, Next, Exit) · Back closes the menu or the player |
+| Live player | ▲ ▼ change channel · ◀ channel list · OK menu (Channel list, Back to the last channel, Audio, Subtitles, Favourite) · Back closes the menu or the player |
 | A stream won't load | NovaBox tries 3 times (other feeds of the same Free TV channel first), then asks: **Try again** or **Close player**. ▲ ▼ still change channel |
 | Film player | OK shows the icon controls (back 10s, play/pause, forward 30s, start over, audio, subtitles, and exit on the far right; the focused one shows its name) · ◀ ▶ skip back 10s / forward 30s · ▲ from the buttons reaches the progress bar: ◀ ▶ scrub (hold to go faster), the time you'll jump to shows above the bar, OK jumps there (or it jumps when you stop), Back cancels · Back hides the controls, then closes the player |
 
@@ -160,6 +162,7 @@ echo "sdk.dir=/path/to/Android/Sdk" > local.properties
 - `data/Stores.kt`: profiles, favourites and settings
 - `data/FreeTv.kt`: Free TV country lists
 - `data/Updater.kt`: in-app updates from `release/version.json`
+- `data/Logos.kt`: channel logos by name from `release/logos.tsv.gz` (rebuild it with `tools/build_logos.py`)
 - `data/RealDebrid.kt`: Real-Debrid device-code login, library and link unrestricting
 - `data/Posters.kt`: release-name parsing, IMDb poster lookup and show grouping for the Debrid tab
 - `ui/`: Compose for TV screens (tab bar, live TV, films/series, details, favourites, search, settings, profile editor)

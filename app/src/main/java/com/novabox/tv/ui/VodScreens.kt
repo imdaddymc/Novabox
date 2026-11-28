@@ -94,7 +94,7 @@ fun VodScreen(vm: AppViewModel, kind: VodKind, onPlay: (PlayRequest) -> Unit) {
             }
         }
         Box(Modifier.weight(1f).fillMaxHeight()) {
-            if (cat == CONTINUE) ContinueGrid(resume, onPlay)
+            if (cat == CONTINUE) ContinueGrid(resume, onPlay) { e -> AppGraph.watch.dismiss(e.key); vm.showToast("Removed from Continue watching") }
             else if (cat != null) VodGrid(vm, kind, cat, favs)
         }
     }
@@ -182,8 +182,10 @@ internal fun timeLeft(e: WatchEntry): String {
 }
 
 @Composable
-private fun ContinueGrid(entries: List<WatchEntry>, onPlay: (PlayRequest) -> Unit) {
+private fun ContinueGrid(entries: List<WatchEntry>, onPlay: (PlayRequest) -> Unit, onRemove: (WatchEntry) -> Unit) {
     if (entries.isEmpty()) { CenterMessage("Nothing to continue. Films and episodes you stop part-way show up here."); return }
+    Column {
+    Text("Hold OK on a title to remove it from this list.", fontSize = 13.sp, color = Palette.muted, modifier = Modifier.padding(start = 8.dp, bottom = 6.dp))
     LazyVerticalGrid(
         columns = GridCells.Fixed(5),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -197,8 +199,10 @@ private fun ContinueGrid(entries: List<WatchEntry>, onPlay: (PlayRequest) -> Uni
                 subtitle = if (e.episode != null) "${e.subtitle.replace(" · Episode ", " · E")} · ${timeLeft(e)}" else timeLeft(e),
                 onClick = { onPlay(e.toRequest()) },
                 progress = e.fraction,
+                onLongClick = { onRemove(e) },
             )
         }
+    }
     }
 }
 

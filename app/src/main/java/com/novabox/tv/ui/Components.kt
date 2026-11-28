@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -104,11 +105,14 @@ fun FocusSurface(
     focusedScale: Float = 1.04f,
     onFocus: (() -> Unit)? = null,
     container: Color = Palette.card,
+    /** Holding OK. */
+    onLongClick: (() -> Unit)? = null,
     content: @Composable BoxScope.(focused: Boolean) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
+        onLongClick = onLongClick,
         modifier = modifier.onFocusChanged {
             focused = it.isFocused
             if (it.isFocused) onFocus?.invoke()
@@ -176,8 +180,16 @@ fun Logo(url: String, name: String, size: Dp, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         Text(name.take(2).uppercase(), color = Palette.muted, fontWeight = FontWeight.Bold, fontSize = (size.value / 3).sp)
-        if (url.isNotBlank()) {
-            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(4.dp))
+        // The portal's logo first; if it has none or it doesn't load, one found by the channel's name.
+        val found by com.novabox.tv.data.Logos.byName.collectAsState()
+        var portalFailed by remember(url) { mutableStateOf(false) }
+        val shown = url.takeIf { it.isNotBlank() && !portalFailed } ?: found[name].orEmpty()
+        if (shown.isNotBlank()) {
+            AsyncImage(
+                model = shown, contentDescription = null, contentScale = ContentScale.Fit,
+                onError = { if (shown == url) portalFailed = true },
+                modifier = Modifier.fillMaxSize().padding(4.dp),
+            )
         }
     }
 }
@@ -193,8 +205,9 @@ fun PosterCard(
     onFocus: (() -> Unit)? = null,
     /** How far through it the user is, drawn as a bar under the poster. */
     progress: Float? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
-    FocusSurface(onClick = onClick, modifier = modifier, focusedScale = 1.07f, onFocus = onFocus) { focused ->
+    FocusSurface(onClick = onClick, modifier = modifier, focusedScale = 1.07f, onFocus = onFocus, onLongClick = onLongClick) { focused ->
         Column {
             Box(
                 Modifier.fillMaxWidth().aspectPoster().background(

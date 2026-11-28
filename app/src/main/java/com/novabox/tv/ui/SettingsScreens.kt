@@ -168,6 +168,7 @@ private fun PictureSection() {
     var hdr by remember { mutableStateOf(st.hdrOutput) }
     var sharpen by remember { mutableStateOf(st.sharpen) }
     var skip by remember { mutableStateOf(st.skipIntros) }
+    var preview by remember { mutableStateOf(st.livePreview) }
     SectionTitle("PICTURE AND PLAYBACK")
     @Composable fun toggle(label: String, on: Boolean, note: String, flip: () -> Unit) {
         NovaButton("$label: ${if (on) "On" else "Off"}", flip, icon = if (on) Icons.Filled.Check else Icons.Filled.Close)
@@ -187,6 +188,9 @@ private fun PictureSection() {
     }
     toggle("Skip intro and credits", skip, "After two or three episodes of a show, NovaBox recognises its intro and end credits by their sound. It then offers Skip intro, and the next episode when the credits start. It all stays on this TV.") {
         skip = !skip; st.skipIntros = skip
+    }
+    toggle("Live preview", preview, "A small, silent picture of the channel you're on in the Live TV list. Turn it off if your provider allows only one stream at a time and the full player struggles to start.") {
+        preview = !preview; st.livePreview = preview
     }
 }
 

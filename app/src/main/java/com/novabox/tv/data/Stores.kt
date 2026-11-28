@@ -131,6 +131,10 @@ class SettingsStore(context: Context) {
     var hdrOutput: Boolean
         get() = prefs.getBoolean("hdrOutput", true)
         set(v) { prefs.edit().putBoolean("hdrOutput", v).apply() }
+    /** A small, silent preview of the focused channel on the Live tab. */
+    var livePreview: Boolean
+        get() = prefs.getBoolean("livePreview", true)
+        set(v) { prefs.edit().putBoolean("livePreview", v).apply() }
     /** Skip intro and Up next at the credits, learned by ear (see SkipPrints). */
     var skipIntros: Boolean
         get() = prefs.getBoolean("skipIntros", true)

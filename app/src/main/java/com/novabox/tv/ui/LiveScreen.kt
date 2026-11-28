@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -53,6 +55,13 @@ import java.util.Locale
 
 @Composable
 fun LiveScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
+    // The preview's stream is let go first: many portals allow only one stream per box.
+    val play: (PlayRequest) -> Unit = { r -> PreviewPlayer.stop(); onPlay(r) }
+    val preview = remember { AppGraph.settings.livePreview }
+    // The categories column narrows once a category is chosen and the focus moves on to the channels.
+    var inCategories by remember { mutableStateOf(true) }
+    // The preview plays only while the viewer is on the channels or their details, not on the tabs.
+    var inChannels by remember { mutableStateOf(false) }
     val favs by AppGraph.favorites.channels.collectAsState()
     val recent by AppGraph.recent.channels.collectAsState()
     val list = remember(vm.selectedGenre, vm.channels, recent) { vm.channelsFor(vm.selectedGenre) }
@@ -65,40 +74,41 @@ fun LiveScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
         return
     }
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+    Row(Modifier.fillMaxSize().onFocusChanged { if (!it.hasFocus) inChannels = false }, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         // Categories. ▶ goes into the guide's top row (it doesn't line up with the categories).
         val guideEntry = remember { androidx.compose.ui.focus.FocusRequester() }
         val guideItem = remember { androidx.compose.ui.focus.FocusRequester() }
-        Column(Modifier.width(210.dp).fillMaxHeight().onPreviewKeyEvent { e ->
+        val catWidth by androidx.compose.animation.core.animateDpAsState(if (inCategories || vm.selectedGenre == AppViewModel.GUIDE) 210.dp else 128.dp, label = "categories")
+        Column(Modifier.width(catWidth).fillMaxHeight().onFocusChanged { inCategories = it.hasFocus; if (it.hasFocus) inChannels = false }.onPreviewKeyEvent { e ->
             if (e.type != KeyEventType.KeyDown || e.key != Key.DirectionRight || vm.selectedGenre != AppViewModel.GUIDE) return@onPreviewKeyEvent false
             runCatching { guideEntry.requestFocus() }.isSuccess
         }) {
             SectionTitle("CATEGORIES")
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp, horizontal = 4.dp)) {
                 item {
-                    GenreItem("All channels", vm.channels.size, vm.selectedGenre == null) { vm.selectedGenre = null }
+                    GenreItem("All channels", vm.channels.size.takeIf { inCategories }, vm.selectedGenre == null) { vm.selectedGenre = null }
                 }
                 item {
                     GenreItem("TV guide", null, vm.selectedGenre == AppViewModel.GUIDE, Modifier.focusRequester(guideItem)) { vm.selectedGenre = AppViewModel.GUIDE }
                 }
                 val recentCount = recent.count { r -> vm.channels.any { it.id == r.id } }
                 if (recentCount > 0) item {
-                    GenreItem("Recent", recentCount, vm.selectedGenre == AppViewModel.RECENT) { vm.selectedGenre = AppViewModel.RECENT }
+                    GenreItem("Recent", recentCount.takeIf { inCategories }, vm.selectedGenre == AppViewModel.RECENT) { vm.selectedGenre = AppViewModel.RECENT }
                 }
                 items(vm.genres, key = { it.id }) { g ->
                     val count = remember(g.id, vm.channels) { vm.channels.count { it.genreId == g.id } }
-                    if (count > 0) GenreItem(g.title, count, vm.selectedGenre == g.id) { vm.selectedGenre = g.id }
+                    if (count > 0) GenreItem(g.title, count.takeIf { inCategories }, vm.selectedGenre == g.id) { vm.selectedGenre = g.id }
                 }
             }
         }
 
         if (vm.selectedGenre == AppViewModel.GUIDE) {
-            TvGuide(vm, list, onPlay, Modifier.weight(1f), guideEntry, onLeave = { runCatching { guideItem.requestFocus() }.isSuccess })
+            TvGuide(vm, list, play, Modifier.weight(1f), guideEntry, onLeave = { runCatching { guideItem.requestFocus() }.isSuccess })
             return@Row
         }
 
         // Channels
-        Column(Modifier.weight(1f).fillMaxHeight()) {
+        Column(Modifier.weight(1f).fillMaxHeight().onFocusChanged { if (it.hasFocus) inChannels = true }) {
             SectionTitle(if (vm.selectedGenre == AppViewModel.RECENT) "RECENTLY WATCHED · ${list.size}" else "CHANNELS · ${list.size}")
             LazyColumn(
                 state = listState,
@@ -107,51 +117,45 @@ fun LiveScreen(vm: AppViewModel, onPlay: (PlayRequest) -> Unit) {
             ) {
                 itemsIndexed(list, key = { _, c -> c.id }) { index, c ->
                     val isFav = favs.any { it.id == c.id }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FocusSurface(
-                            onClick = { onPlay(PlayRequest.Live(list, index)) },
-                            onFocus = { focused = c; vm.loadEpg(c) },
-                            focusedScale = 1.02f,
-                            modifier = Modifier.weight(1f),
-                        ) { f ->
-                            Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    c.number.toString(), modifier = Modifier.width(38.dp), fontSize = 13.sp,
-                                    color = if (f) Color(0xFF39425A) else Palette.muted,
-                                )
-                                Logo(c.logo, c.name, 36.dp)
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                    val now = vm.epg[c.id]?.currentProgramme()
-                                    if (now != null) {
-                                        Text(now.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = if (f) Color(0xFF39425A) else Palette.muted)
-                                    }
+                    val inRecent = vm.selectedGenre == AppViewModel.RECENT
+                    // Favourites are added from the details panel (▶) or the player menu; the ♥ marks them here.
+                    FocusSurface(
+                        onClick = { play(PlayRequest.Live(list, index)) },
+                        onFocus = { focused = c; vm.loadEpg(c) },
+                        onLongClick = if (inRecent) ({ AppGraph.recent.remove(c.id); vm.showToast("Removed from Recent") }) else null,
+                        focusedScale = 1.02f,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { f ->
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                c.number.toString(), modifier = Modifier.width(44.dp), fontSize = 13.sp,
+                                color = if (f) Color(0xFF39425A) else Palette.muted,
+                            )
+                            Logo(c.logo, c.name, 36.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                val now = vm.epg[c.id]?.currentProgramme()
+                                if (now != null) {
+                                    Text(now.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = if (f) Color(0xFF39425A) else Palette.muted)
                                 }
-                                if (isFav) FavMark(true, 18.dp)
                             }
-                        }
-                        // A dedicated, focusable favourite toggle: no colour button needed.
-                        FocusSurface(
-                            onClick = { AppGraph.favorites.toggle(c); vm.showToast(if (isFav) "Removed from favourites" else "Added to favourites") },
-                            shape = RoundedCornerShape(50),
-                            focusedScale = 1.12f,
-                            modifier = Modifier.size(44.dp),
-                        ) { f ->
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                FavMark(isFav, 22.dp, tint = if (isFav && !f) Palette.heart else null)
-                            }
+                            if (isFav) FavMark(true, 18.dp, tint = if (f) null else Palette.heart)
                         }
                     }
                 }
             }
+            if (vm.selectedGenre == AppViewModel.RECENT && list.isNotEmpty()) {
+                Text("Hold OK on a channel to remove it from Recent.", fontSize = 12.sp, color = Palette.muted, modifier = Modifier.padding(start = 6.dp, top = 6.dp))
+            }
         }
 
         // Info / EPG panel
-        Column(Modifier.width(330.dp).fillMaxHeight().padding(top = 26.dp)) {
+        Column(Modifier.width(if (preview) 380.dp else 330.dp).fillMaxHeight().padding(top = 26.dp)) {
             val c = focused ?: list.firstOrNull()
-            if (c != null) ChannelInfo(vm, c, favs.any { it.id == c.id }) {
-                onPlay(PlayRequest.Live(list, list.indexOf(c).coerceAtLeast(0)))
+            if (c != null) ChannelInfo(vm, c, favs.any { it.id == c.id }, preview, previewActive = inChannels && !inCategories,
+                onRemoveRecent = if (vm.selectedGenre == AppViewModel.RECENT) ({ AppGraph.recent.remove(c.id); focused = null; vm.showToast("Removed from Recent") }) else null) {
+                play(PlayRequest.Live(list, list.indexOf(c).coerceAtLeast(0)))
             }
         }
     }
@@ -168,21 +172,25 @@ private fun GenreItem(title: String, count: Int?, selected: Boolean, modifier: M
 }
 
 @Composable
-private fun ChannelInfo(vm: AppViewModel, c: Channel, isFav: Boolean, onWatch: () -> Unit) {
+private fun ChannelInfo(vm: AppViewModel, c: Channel, isFav: Boolean, preview: Boolean, previewActive: Boolean, onRemoveRecent: (() -> Unit)? = null, onWatch: () -> Unit) {
     val fmt = rememberTimeFormat(showAmPm = false)
     LaunchedEffect(c.id) { vm.loadEpg(c) }
     Column(
-        Modifier.fillMaxWidth().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(22.dp)
+        Modifier.fillMaxWidth().background(Palette.bg2, RoundedCornerShape(16.dp)).padding(if (preview) 16.dp else 22.dp)
     ) {
+        if (preview) {
+            LivePreview(c, previewActive)
+            Spacer(Modifier.height(12.dp))
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Logo(c.logo, c.name, 60.dp)
+            Logo(c.logo, c.name, if (preview) 40.dp else 60.dp)
             Spacer(Modifier.width(14.dp))
             Column {
-                Text(c.name, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(c.name, fontSize = if (preview) 18.sp else 22.sp, fontWeight = FontWeight.Bold, maxLines = if (preview) 1 else 2, overflow = TextOverflow.Ellipsis)
                 Text("Channel ${c.number}", color = Palette.muted, fontSize = 14.sp)
             }
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(if (preview) 12.dp else 18.dp))
         Row(horizontalArrangement = RowGap) {
             NovaButton("Watch", onWatch, icon = Icons.Filled.PlayArrow, primary = true)
             NovaButton(
@@ -191,13 +199,17 @@ private fun ChannelInfo(vm: AppViewModel, c: Channel, isFav: Boolean, onWatch: (
                 icon = Icons.Filled.Favorite, tint = if (isFav) Palette.heart else null,
             )
         }
-        Spacer(Modifier.height(22.dp))
+        if (onRemoveRecent != null) {
+            Spacer(Modifier.height(8.dp))
+            NovaButton("Remove from Recent", onRemoveRecent, icon = Icons.Filled.Close)
+        }
+        Spacer(Modifier.height(if (preview) 12.dp else 22.dp))
         SectionTitle("PROGRAMME GUIDE")
         val entries = vm.epg[c.id]
         when {
             entries == null -> Text("Loading guide…", color = Palette.muted, fontSize = 14.sp)
             entries.isEmpty() -> Text("No guide data for this channel", color = Palette.muted, fontSize = 14.sp)
-            else -> entries.take(5).forEachIndexed { i, e ->
+            else -> entries.take(if (preview) 3 else 5).forEachIndexed { i, e ->
                 val live = e.isLive()
                 Column(Modifier.padding(vertical = 6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

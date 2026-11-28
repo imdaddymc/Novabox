@@ -16,7 +16,9 @@ import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-class PortalException(msg: String) : Exception(msg)
+open class PortalException(msg: String) : Exception(msg)
+/** The portal answered and turned this box down (MAC unknown or blocked, login rejected). */
+class PortalRefused(msg: String) : PortalException(msg)
 
 /**
  * Client for Stalker / Ministra middleware portals (the protocol MAG set-top boxes use).
@@ -107,7 +109,7 @@ class StalkerClient(val profile: Profile) {
                 return@withLock
             } catch (e: PortalSays) {
                 loggedIn = false
-                throw PortalException(e.message ?: "The portal refused this device")
+                throw PortalRefused(e.message ?: "The portal refused this device")
             } catch (e: Exception) {
                 errors += "${ep}: ${e.message ?: e.javaClass.simpleName}"
             }
@@ -140,7 +142,7 @@ class StalkerClient(val profile: Profile) {
                     "device_id" to deviceId, "device_id2" to deviceId2,
                 )
             )
-            if (a.opt("js") == false) throw PortalException("Login or password rejected")
+            if (a.opt("js") == false) throw PortalSays("Login or password rejected")
         }
         if (js != null && js.has("blocked") && js.optString("blocked") == "1") throw PortalSays("This MAC address ($mac) is blocked by the portal")
         // Portals answer an unknown MAC with a message and no account id; show it instead of carrying on.

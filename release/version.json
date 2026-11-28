@@ -1,6 +1,6 @@
 {
-  "versionCode": 16,
-  "versionName": "1.5.0",
-  "notes": "Skip intro and Up next at the end credits, learned automatically from the sound of a show's episodes. NovaBox opens straight to your saved channel list. Audio track picker in the live menu and on the remote's audio key.",
+  "versionCode": 17,
+  "versionName": "1.5.1",
+  "notes": "Live TV: a small live preview of the channel you're on, a narrower category list once you pick one, real channel logos, and Remove from Recent. Fixes: the quality tag shows again on every channel, OK no longer favourites a channel in the player, a tidier player menu, and remembered audio language within a session. Hold OK to remove a title from Continue watching.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

@@ -354,7 +354,10 @@ class PlayerActivity : ComponentActivity() {
         )
     }
 
-    /** A small "1080p" tag in the top-right corner that fades out 3 seconds after a stream starts. */
+    /**
+     * A small "1080p" tag in the top-right corner that fades out 3 seconds after a stream starts. Kept
+     * well inside the edges: many TVs crop the outer few percent of the picture (overscan).
+     */
     @Composable
     private fun ResolutionBadge(modifier: Modifier = Modifier) {
         var label by remember { mutableStateOf("") }
@@ -363,14 +366,21 @@ class PlayerActivity : ComponentActivity() {
         val serial = streamSerial
         DisposableEffect(serial) {
             var shown = false
-            val l = object : Player.Listener {
-                override fun onVideoSizeChanged(videoSize: VideoSize) {
-                    if (!shown && videoSize.width > 0 && videoSize.height > 0) {
-                        shown = true
-                        label = resolutionLabel(videoSize.width, videoSize.height)
-                        shows++
-                    }
+            // The stream's own picture size (what the channel sends), not the decoder's output, which
+            // some TVs keep at the previous channel's size when they reuse the decoder.
+            fun show() {
+                val f = player.videoFormat
+                val w = f?.width?.takeIf { it > 0 } ?: player.videoSize.width
+                val h = f?.height?.takeIf { it > 0 } ?: player.videoSize.height
+                if (!shown && w > 0 && h > 0) {
+                    shown = true
+                    label = resolutionLabel(w, h)
+                    shows++
                 }
+            }
+            val l = object : Player.Listener {
+                // Every new stream draws a first frame, even when its size is the same as the last one's.
+                override fun onRenderedFirstFrame() = show()
             }
             player.addListener(l)
             onDispose { player.removeListener(l) }
@@ -381,7 +391,7 @@ class PlayerActivity : ComponentActivity() {
             delay(3000)
             visible = false
         }
-        AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut(tween(700)), modifier = modifier.padding(top = 28.dp, end = 32.dp)) {
+        AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut(tween(700)), modifier = modifier.padding(top = 48.dp, end = 80.dp)) {
             Text(
                 label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.9f),
                 modifier = Modifier.background(Color(0x8C000000), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
@@ -419,6 +429,7 @@ class PlayerActivity : ComponentActivity() {
     private fun VodPlayer(req: PlayRequest.Vod, onNext: (PlayRequest.Vod) -> Unit) {
         var status by remember { mutableStateOf<String?>("Loading…") }
         var controls by remember { mutableStateOf(true) }
+        var okDown by remember { mutableStateOf(false) }
         var hideAt by remember { mutableLongStateOf(System.currentTimeMillis() + 5000) }
         var playing by remember { mutableStateOf(true) }
         var position by remember { mutableLongStateOf(0L) }
@@ -568,11 +579,15 @@ class PlayerActivity : ComponentActivity() {
                     }
                 }
                 .onKeyEvent { e ->
+                    // The controls open when OK is let go, so the same press can't also press a button.
+                    if (e.type == KeyEventType.KeyUp && okDown && e.key in setOf(Key.DirectionCenter, Key.Enter, Key.NumPadEnter)) {
+                        okDown = false; if (inIntro) skipIntro() else poke(); return@onKeyEvent true
+                    }
                     if (e.type != KeyEventType.KeyDown || controls || panel != null) return@onKeyEvent false
                     when (e.key) {
                         Key.DirectionLeft -> { seek(-10_000); true }
                         Key.DirectionRight -> { seek(30_000); true }
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { if (inIntro) skipIntro() else poke(); true }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { okDown = true; true }
                         Key.DirectionUp, Key.DirectionDown, Key.Menu -> { poke(); true }
                         else -> false
                     }
@@ -691,9 +706,14 @@ class PlayerActivity : ComponentActivity() {
                 itemsIndexed(options) { i, o ->
                     FocusSurface(
                         onClick = {
+                            // The sound restarts from here: the intro/credits listener must know where it is.
+                            skipTap.anchorMs = player.currentPosition
                             applyTrack(player, type, o)
                             if (type == C.TRACK_TYPE_AUDIO) o.lang?.let { AppGraph.settings.audioLang = it }
                             else if (o.lang != null) AppGraph.settings.subtitleLang = o.lang
+                            // Also for the next channel or episode in this player, not only the next time it opens.
+                            player.trackSelectionParameters = preferredTracks(player.trackSelectionParameters,
+                                if (type == C.TRACK_TYPE_AUDIO) o.lang else null, if (type == C.TRACK_TYPE_TEXT) o.lang else null)
                             onClose()
                         },
                         selected = o.selected, focusedScale = 1.02f,
@@ -830,6 +850,8 @@ class PlayerActivity : ComponentActivity() {
         }
         var panel by remember { mutableStateOf<Int?>(null) }
         var showMenu by remember { mutableStateOf(false) }
+        // OK was pressed with the menu closed; the menu opens when it is let go.
+        var okDown by remember { mutableStateOf(false) }
         var showList by remember { mutableStateOf(false) }
         var bannerUntil by remember { mutableLongStateOf(System.currentTimeMillis() + 5000) }
         var showBanner by remember { mutableStateOf(true) }
@@ -941,13 +963,18 @@ class PlayerActivity : ComponentActivity() {
                 .focusRequester(rootFocus)
                 .focusable()
                 .onKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyUp && okDown && e.key in setOf(Key.DirectionCenter, Key.Enter, Key.NumPadEnter)) {
+                        okDown = false; showMenu = true; return@onKeyEvent true
+                    }
                     if (e.type != KeyEventType.KeyDown || showMenu || showList || panel != null) return@onKeyEvent false
                     when (e.key) {
                         Key.LastChannel -> { jumpBack(); true }
                         Key.DirectionUp, Key.ChannelUp -> { zap(+1); true }
                         Key.DirectionDown, Key.ChannelDown -> { zap(-1); true }
                         Key.DirectionLeft -> { showList = true; true }
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Menu, Key.DirectionRight -> { showMenu = true; true }
+                        // The menu opens when OK is let go, so the same press can't also press its first button.
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { okDown = true; true }
+                        Key.Menu, Key.DirectionRight -> { showMenu = true; true }
                         Key.Info -> { showBanner = true; bannerUntil = System.currentTimeMillis() + 5000; true }
                         Key.MediaAudioTrack -> { panel = C.TRACK_TYPE_AUDIO; true }
                         Key.Captions -> { panel = C.TRACK_TYPE_TEXT; true }
@@ -1029,7 +1056,8 @@ class PlayerActivity : ComponentActivity() {
         Column(
             Modifier.fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
-                .padding(start = 56.dp, end = 56.dp, top = 60.dp, bottom = 36.dp)
+                // Wide margins: many TVs crop the picture's edges (overscan).
+                .padding(start = 80.dp, end = 80.dp, top = 60.dp, bottom = 44.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Logo(c.logo, c.name, 64.dp)
@@ -1052,19 +1080,17 @@ class PlayerActivity : ComponentActivity() {
             if (menu) {
                 Spacer(Modifier.height(18.dp))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = RowGap) {
-                    if (canFavourite) NovaButton(if (isFav) "Remove favourite" else "Favourite", onFav, Modifier.focusRequester(first), icon = Icons.Filled.Favorite, tint = if (isFav) Palette.heart else null)
-                    NovaButton("Channel list", onList, if (canFavourite) Modifier else Modifier.focusRequester(first), icon = Icons.AutoMirrored.Filled.List)
-                    if (lastChannel != null) NovaButton("Back to ${lastChannel.name.let { if (it.length > 18) it.take(17) + "…" else it }}", onLast, icon = RestartIcon)
+                    // Channel up/down and leaving are the remote's own ▲ ▼ and Back, so they aren't repeated here.
+                    NovaButton("Channel list", onList, Modifier.focusRequester(first), icon = Icons.AutoMirrored.Filled.List)
+                    if (lastChannel != null) NovaButton("Back to ${lastChannel.name.let { if (it.length > 14) it.take(13).trimEnd() + "…" else it }}", onLast, icon = RestartIcon)
                     // Always offered, so it's easy to find; the count shows when there's a choice of languages.
                     NovaButton(if (audioChoices > 1) "Audio ($audioChoices)" else "Audio", { onTracks(C.TRACK_TYPE_AUDIO) }, icon = AudioIcon)
                     if (subtitleChoices > 0) NovaButton("Subtitles", { onTracks(C.TRACK_TYPE_TEXT) }, icon = SubtitlesIcon)
-                    NovaButton("Previous", onPrev, icon = Icons.Filled.KeyboardArrowDown)
-                    NovaButton("Next", onNext, icon = Icons.Filled.KeyboardArrowUp)
-                    NovaButton("Exit player", onClose, icon = Icons.AutoMirrored.Filled.ArrowBack)
+                    if (canFavourite) NovaButton(if (isFav) "Unfavourite" else "Favourite", onFav, icon = Icons.Filled.Favorite, tint = if (isFav) Palette.heart else null)
                 }
             } else {
                 Spacer(Modifier.height(10.dp))
-                Text("OK: menu   ·   ▲▼: change channel   ·   ◀: channel list", fontSize = 13.sp, color = Palette.muted)
+                Text("OK: menu   ·   ▲▼: change channel   ·   ◀: channel list   ·   Back: exit", fontSize = 13.sp, color = Palette.muted)
             }
         }
     }

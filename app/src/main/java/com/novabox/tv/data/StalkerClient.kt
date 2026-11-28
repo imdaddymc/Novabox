@@ -177,7 +177,8 @@ class StalkerClient(val profile: Profile) {
 
     private class AuthExpired : Exception("Authorization failed")
     /** The portal itself answered and refused this device: no point trying other endpoints. */
-    private class PortalSays(msg: String) : Exception(msg)
+    /** The portal refused this box (unknown or blocked MAC): its own words. */
+    class PortalSays(msg: String) : Exception(msg)
 
     /** Calls the portal, logging in again once if the session expired. */
     private suspend fun call(params: Map<String, String>): JSONObject = withContext(Dispatchers.IO) {

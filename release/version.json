@@ -1,6 +1,6 @@
 {
-  "versionCode": 15,
-  "versionName": "1.4.8",
-  "notes": "TV guide: up and down now land on what's on now in the next channel (or the same time, if you've moved along to a later show), and the list scrolls to keep it in view.",
+  "versionCode": 16,
+  "versionName": "1.5.0",
+  "notes": "Skip intro and Up next at the end credits, learned automatically from the sound of a show's episodes. NovaBox opens straight to your saved channel list. Audio track picker in the live menu and on the remote's audio key.",
   "apk": "https://raw.githubusercontent.com/imdaddymc/Novabox/main/release/NovaBox.apk"
 }

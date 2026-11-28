@@ -131,6 +131,10 @@ class SettingsStore(context: Context) {
     var hdrOutput: Boolean
         get() = prefs.getBoolean("hdrOutput", true)
         set(v) { prefs.edit().putBoolean("hdrOutput", v).apply() }
+    /** Skip intro and Up next at the credits, learned by ear (see SkipPrints). */
+    var skipIntros: Boolean
+        get() = prefs.getBoolean("skipIntros", true)
+        set(v) { prefs.edit().putBoolean("skipIntros", v).apply() }
     /** A light sharpen filter for soft, low-quality channels. */
     var sharpen: Boolean
         get() = prefs.getBoolean("sharpen", false)

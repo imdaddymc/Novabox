@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.materialIcon
 import androidx.compose.material.icons.materialPath
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.runtime.Composable
@@ -87,6 +88,10 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.TeeAudioProcessor
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -98,6 +103,8 @@ import com.novabox.tv.data.EpgEntry
 import com.novabox.tv.data.PlayRequest
 import com.novabox.tv.data.PlaybackHolder
 import com.novabox.tv.data.SettingsStore
+import com.novabox.tv.data.SkipPrints
+import com.novabox.tv.data.SkipStore
 import com.novabox.tv.data.WatchEntry
 import com.novabox.tv.ui.FocusSurface
 import com.novabox.tv.ui.Logo
@@ -112,6 +119,8 @@ import com.novabox.tv.ui.onBackKey
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -200,7 +209,16 @@ class PlayerActivity : ComponentActivity() {
             .setUserAgent(headers["User-Agent"])
             .setDefaultRequestProperties(headers - "User-Agent")
         val buffer = AppGraph.settings.bufferSeconds * 1000
-        player = ExoPlayer.Builder(this)
+        // The decoded sound also goes past the intro/credits listener (see SkipTap).
+        val renderers = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(TeeAudioProcessor(skipTap)))
+                    .build()
+        }
+        player = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
             .setLoadControl(
                 DefaultLoadControl.Builder()
@@ -217,6 +235,9 @@ class PlayerActivity : ComponentActivity() {
         if (settings.sharpen) player.setVideoEffects(listOf(SharpenEffect()))
         hdrSurface = settings.hdrOutput && displaySupportsHdr(this)
         player.addListener(object : Player.Listener {
+            override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) skipTap.anchorMs = new.positionMs
+            }
             override fun onTracksChanged(t: Tracks) {
                 tracks = t
                 if (settings.matchFrameRate) matchFrameRate(this@PlayerActivity, videoFrameRate(t))
@@ -248,6 +269,8 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private var sharpenOn = false
+    /** Hears episodes' intros and credits (see [SkipTap]). */
+    private val skipTap = SkipTap()
     /** Films use a SurfaceView instead of a TextureView so HDR reaches the TV. */
     private var hdrSurface = false
 
@@ -277,6 +300,7 @@ class PlayerActivity : ComponentActivity() {
     /** [forceHls]: treat the stream as HLS even when its address doesn't end in .m3u8. */
     private fun play(url: String, forceHls: Boolean = false) {
         streamSerial++
+        skipTap.anchorMs = 0
         val item = MediaItem.Builder().setUri(url).apply {
             when {
                 forceHls || url.contains(".m3u8", ignoreCase = true) -> setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -411,6 +435,57 @@ class PlayerActivity : ComponentActivity() {
         var upNext by remember { mutableStateOf<PlayRequest.Vod?>(null) }
         fun lookUpNext() = nextLookup ?: req.next?.let { find -> scope.async { runCatching { find(req.releaseName) }.getOrNull() }.also { nextLookup = it } }
 
+        // Skip intro and Up next at the credits, for episodes: learned by ear from earlier episodes
+        // of the same show (see SkipPrints). Nothing shows until a show's intro or credits is known.
+        val show = remember(req) { SkipStore.showOf(req)?.takeIf { AppGraph.settings.skipIntros } }
+        var prints by remember { mutableStateOf<SkipPrints.Show?>(null) }
+        // Where this episode's intro was heard (start to end, in ms), and where its credits start.
+        var introSpan by remember { mutableStateOf<LongRange?>(null) }
+        var outroAt by remember { mutableLongStateOf(-1L) }
+        // Up next was offered at the credits: Cancel then just carries on watching.
+        var fromCredits by remember { mutableStateOf(false) }
+        DisposableEffect(req) {
+            skipTap.begin(show != null)
+            onDispose {
+                skipTap.enabled = false
+                if (show != null) SkipStore.learnLater(show, skipTap.heard(req.key.ifBlank { req.title + req.subtitle }, introSpan != null, outroAt >= 0))
+            }
+        }
+        LaunchedEffect(show) {
+            if (show != null) prints = withContext(Dispatchers.IO) { SkipStore.load(show) }
+        }
+        LaunchedEffect(prints) {
+            val p = prints ?: return@LaunchedEffect
+            val introPrint = p.intro; val outroPrint = p.outro
+            val (introIdx, outroIdx) = withContext(Dispatchers.Default) { introPrint?.let { SkipPrints.Index(it) } to outroPrint?.let { SkipPrints.Index(it) } }
+            while (true) {
+                delay(2000)
+                if (!player.isPlaying) continue
+                val frame = SkipPrints.frameOf(player.currentPosition)
+                if (introIdx != null && introPrint != null && introSpan == null && frame < SkipPrints.REGION_FRAMES) {
+                    val codes = skipTap.intro.copyOf()
+                    val m = withContext(Dispatchers.Default) { SkipPrints.longestCommon(codes, introIdx, SkipPrints.MIN_DETECT, aUpTo = frame.coerceAtLeast(1)) }
+                    if (m != null) introSpan = SkipPrints.msOf(m.aStart - m.bStart).coerceAtLeast(0)..SkipPrints.msOf(m.aStart + introPrint.size - m.bStart)
+                    if (m != null) android.util.Log.i("NovaSkip", "intro heard: $introSpan")
+                }
+                val o = skipTap.outroStartFrame()
+                if (outroIdx != null && outroPrint != null && outroAt < 0 && o >= 0 && frame > o) {
+                    val codes = skipTap.outro.copyOf()
+                    val heardTo = (frame - o).coerceAtMost(SkipPrints.REGION_FRAMES)
+                    val m = withContext(Dispatchers.Default) { SkipPrints.longestCommon(codes, outroIdx, SkipPrints.MIN_DETECT, aUpTo = heardTo) }
+                    if (m != null) outroAt = SkipPrints.msOf(o + m.aStart - m.bStart)
+                    if (m != null) android.util.Log.i("NovaSkip", "credits heard from $outroAt")
+                }
+            }
+        }
+        // The credits have started: the episode counts as watched, and the next one is offered.
+        LaunchedEffect(outroAt) {
+            if (outroAt < 0 || ended || upNext != null) return@LaunchedEffect
+            saveProgress(ended = true)
+            val n = lookUpNext()?.await() ?: return@LaunchedEffect
+            if (!ended && upNext == null) { fromCredits = true; upNext = n }
+        }
+
         LaunchedEffect(req) {
             try {
                 val saved = req.key.takeIf { it.isNotBlank() }?.let { AppGraph.watch.get(it) }
@@ -429,6 +504,7 @@ class PlayerActivity : ComponentActivity() {
             while (true) {
                 position = player.currentPosition.coerceAtLeast(0)
                 duration = player.duration.takeIf { it > 0 } ?: 0
+                skipTap.durationMs = duration
                 playing = player.isPlaying || (player.playWhenReady && player.playbackState == Player.STATE_BUFFERING)
                 if (controls && panel == null && System.currentTimeMillis() > hideAt && player.isPlaying) controls = false
                 if (req.next != null && nextLookup == null && duration > 0 && position >= duration - 120_000) lookUpNext()
@@ -468,6 +544,8 @@ class PlayerActivity : ComponentActivity() {
             poke()
         }
         fun toggle() { if (player.isPlaying) player.pause() else player.play(); playing = !playing; poke() }
+        val inIntro = introSpan?.let { position >= it.first - 500 && position < it.last - 1500 } == true
+        fun skipIntro() { introSpan?.let { player.seekTo(it.last); position = it.last } }
 
         BackHandler(enabled = controls && panel == null) { controls = false }
 
@@ -483,6 +561,9 @@ class PlayerActivity : ComponentActivity() {
                         Key.MediaPause -> { player.pause(); poke(); true }
                         Key.MediaFastForward -> { seek(30_000); true }
                         Key.MediaRewind -> { seek(-10_000); true }
+                        // The remote's own audio-language and subtitle buttons, where it has them.
+                        Key.MediaAudioTrack -> { panel = C.TRACK_TYPE_AUDIO; true }
+                        Key.Captions -> { panel = C.TRACK_TYPE_TEXT; true }
                         else -> { if (controls) hideAt = System.currentTimeMillis() + 5000; false }
                     }
                 }
@@ -491,7 +572,8 @@ class PlayerActivity : ComponentActivity() {
                     when (e.key) {
                         Key.DirectionLeft -> { seek(-10_000); true }
                         Key.DirectionRight -> { seek(30_000); true }
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.DirectionUp, Key.DirectionDown, Key.Menu -> { poke(); true }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { if (inIntro) skipIntro() else poke(); true }
+                        Key.DirectionUp, Key.DirectionDown, Key.Menu -> { poke(); true }
                         else -> false
                     }
                 }
@@ -511,12 +593,33 @@ class PlayerActivity : ComponentActivity() {
                     onBack10 = { seek(-10_000) }, onToggle = { toggle() }, onFwd30 = { seek(30_000) },
                     onStartOver = { player.seekTo(0); position = 0; resumedAt = 0; poke() },
                     onTracks = { panel = it }, onExit = { finish() },
-                    onSeekTo = { t -> player.seekTo(t); position = t; poke() })
+                    onSeekTo = { t -> player.seekTo(t); position = t; poke() },
+                    onSkipIntro = if (inIntro) ({ skipIntro(); poke() }) else null)
+            }
+            AnimatedVisibility(inIntro && !controls && upNext == null && panel == null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomEnd)) {
+                SkipIntroPill()
             }
             TrackPanelHost(panel, Modifier.align(Alignment.CenterEnd)) { panel = null; poke() }
             upNext?.let { n ->
-                UpNext(n, Modifier.align(Alignment.BottomEnd), onPlay = { onNext(n) }, onCancel = { finish() })
+                UpNext(n, Modifier.align(Alignment.BottomEnd), onPlay = { onNext(n) },
+                    onCancel = { if (fromCredits && !ended) { upNext = null; fromCredits = false } else finish() })
             }
+        }
+    }
+
+    /** Shown during a show's intro while the controls are hidden: OK jumps to the end of it. */
+    @Composable
+    private fun SkipIntroPill() {
+        Row(
+            Modifier.padding(48.dp).background(Color.White, androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
+                .padding(horizontal = 22.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.SkipNext, null, Modifier.size(24.dp), tint = Color(0xFF0A0E18))
+            Spacer(Modifier.width(8.dp))
+            Text("Skip intro", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0A0E18))
+            Spacer(Modifier.width(12.dp))
+            Text("OK", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF5A6478))
         }
     }
 
@@ -610,7 +713,7 @@ class PlayerActivity : ComponentActivity() {
     private fun VodControls(
         req: PlayRequest.Vod, playing: Boolean, position: Long, duration: Long, resumedAt: Long,
         onBack10: () -> Unit, onToggle: () -> Unit, onFwd30: () -> Unit, onStartOver: () -> Unit,
-        onTracks: (Int) -> Unit, onExit: () -> Unit, onSeekTo: (Long) -> Unit,
+        onTracks: (Int) -> Unit, onExit: () -> Unit, onSeekTo: (Long) -> Unit, onSkipIntro: (() -> Unit)? = null,
     ) {
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) { delay(50); runCatching { first.requestFocus() } }
@@ -632,6 +735,7 @@ class PlayerActivity : ComponentActivity() {
                     Icon(if (playing) PauseIcon else Icons.Filled.PlayArrow, null, Modifier.size(30.dp))
                 }
                 PlayerIconButton("Forward 30 seconds", onFwd30) { SkipIcon(back = false, seconds = 30) }
+                if (onSkipIntro != null) PlayerIconButton("Skip intro", onSkipIntro) { Icon(Icons.Filled.SkipNext, null, Modifier.size(28.dp)) }
                 if (resumedAt > 0) PlayerIconButton("Start over", onStartOver) { Icon(RestartIcon, null, Modifier.size(26.dp)) }
                 PlayerIconButton("Audio", { onTracks(C.TRACK_TYPE_AUDIO) }) { Icon(AudioIcon, null, Modifier.size(26.dp)) }
                 PlayerIconButton("Subtitles", { onTracks(C.TRACK_TYPE_TEXT) }) { Icon(SubtitlesIcon, null, Modifier.size(26.dp)) }
@@ -845,6 +949,8 @@ class PlayerActivity : ComponentActivity() {
                         Key.DirectionLeft -> { showList = true; true }
                         Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Menu, Key.DirectionRight -> { showMenu = true; true }
                         Key.Info -> { showBanner = true; bannerUntil = System.currentTimeMillis() + 5000; true }
+                        Key.MediaAudioTrack -> { panel = C.TRACK_TYPE_AUDIO; true }
+                        Key.Captions -> { panel = C.TRACK_TYPE_TEXT; true }
                         else -> false
                     }
                 }
@@ -949,8 +1055,8 @@ class PlayerActivity : ComponentActivity() {
                     if (canFavourite) NovaButton(if (isFav) "Remove favourite" else "Favourite", onFav, Modifier.focusRequester(first), icon = Icons.Filled.Favorite, tint = if (isFav) Palette.heart else null)
                     NovaButton("Channel list", onList, if (canFavourite) Modifier else Modifier.focusRequester(first), icon = Icons.AutoMirrored.Filled.List)
                     if (lastChannel != null) NovaButton("Back to ${lastChannel.name.let { if (it.length > 18) it.take(17) + "…" else it }}", onLast, icon = RestartIcon)
-                    // Only offered when there is a choice, to keep the bar short on single-track channels.
-                    if (audioChoices > 1) NovaButton("Audio", { onTracks(C.TRACK_TYPE_AUDIO) }, icon = AudioIcon)
+                    // Always offered, so it's easy to find; the count shows when there's a choice of languages.
+                    NovaButton(if (audioChoices > 1) "Audio ($audioChoices)" else "Audio", { onTracks(C.TRACK_TYPE_AUDIO) }, icon = AudioIcon)
                     if (subtitleChoices > 0) NovaButton("Subtitles", { onTracks(C.TRACK_TYPE_TEXT) }, icon = SubtitlesIcon)
                     NovaButton("Previous", onPrev, icon = Icons.Filled.KeyboardArrowDown)
                     NovaButton("Next", onNext, icon = Icons.Filled.KeyboardArrowUp)

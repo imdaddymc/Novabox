@@ -167,7 +167,8 @@ private fun PictureSection() {
     var match by remember { mutableStateOf(st.matchFrameRate) }
     var hdr by remember { mutableStateOf(st.hdrOutput) }
     var sharpen by remember { mutableStateOf(st.sharpen) }
-    SectionTitle("PICTURE")
+    var skip by remember { mutableStateOf(st.skipIntros) }
+    SectionTitle("PICTURE AND PLAYBACK")
     @Composable fun toggle(label: String, on: Boolean, note: String, flip: () -> Unit) {
         NovaButton("$label: ${if (on) "On" else "Off"}", flip, icon = if (on) Icons.Filled.Check else Icons.Filled.Close)
         Text(note, fontSize = 12.sp, color = Palette.muted, modifier = Modifier.padding(top = 6.dp, bottom = 12.dp))
@@ -183,6 +184,9 @@ private fun PictureSection() {
     }
     toggle("Sharpen picture", sharpen, "A light sharpen filter for soft, low-quality channels. It can't add detail that isn't in the stream.") {
         sharpen = !sharpen; st.sharpen = sharpen
+    }
+    toggle("Skip intro and credits", skip, "After two or three episodes of a show, NovaBox recognises its intro and end credits by their sound. It then offers Skip intro, and the next episode when the credits start. It all stays on this TV.") {
+        skip = !skip; st.skipIntros = skip
     }
 }
 

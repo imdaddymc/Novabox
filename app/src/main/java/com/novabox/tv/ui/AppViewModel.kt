@@ -8,6 +8,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novabox.tv.data.AccountInfo
+import com.novabox.tv.data.ListCache
+import com.novabox.tv.data.StalkerClient
 import com.novabox.tv.data.AppGraph
 import com.novabox.tv.data.Channel
 import com.novabox.tv.data.EpgEntry
@@ -15,7 +17,6 @@ import com.novabox.tv.data.Genre
 import com.novabox.tv.data.PlayRequest
 import com.novabox.tv.data.Profile
 import com.novabox.tv.data.Season
-import com.novabox.tv.data.StalkerClient
 import com.novabox.tv.data.VodItem
 import com.novabox.tv.data.VodKind
 import kotlinx.coroutines.Job
@@ -127,10 +128,21 @@ class AppViewModel : ViewModel() {
         searchQuery = ""; searchChannels = emptyList(); searchMovies = emptyList(); searchSeries = emptyList()
         val c = StalkerClient(p)
         AppGraph.client = c
+        categoriesFresh.clear()
+        // Saved lists open the app straight away; the portal is asked for fresh ones in the background.
+        val saved = ListCache.load(p)
+        if (saved != null) {
+            genres = saved.genres; channels = saved.channels
+            AppGraph.channels = channels; AppGraph.genres = genres
+            if (saved.movieCategories.isNotEmpty()) { categories[VodKind.MOVIE] = saved.movieCategories; selectDefaultCategory(VodKind.MOVIE) }
+            if (saved.seriesCategories.isNotEmpty()) { categories[VodKind.SERIES] = saved.seriesCategories; selectDefaultCategory(VodKind.SERIES) }
+            backStack.clear()
+            backStack.add(Route.Home)
+        }
         connectJob = viewModelScope.launch {
             try {
                 c.login()
-                liveLoading = true
+                liveLoading = saved == null
                 // A failed child of async would cancel this whole coroutine and crash the app, even with
                 // the await wrapped, so each call catches its own errors (portals often fail one of them).
                 val (g, ch) = coroutineScope {
@@ -138,20 +150,33 @@ class AppViewModel : ViewModel() {
                     val ch = async { runCatching { c.allChannels() } }
                     g.await() to ch.await()
                 }
-                genres = g
-                channels = ch.getOrElse { e -> if (g.isEmpty()) throw e else emptyList() }
-                AppGraph.channels = channels
-                AppGraph.genres = genres
+                val fresh = ch.getOrElse { e -> if (g.isEmpty() && saved == null) throw e else null }
+                // A failed refresh keeps the saved lists rather than emptying the screen.
+                if (fresh != null && (fresh.isNotEmpty() || saved == null)) {
+                    if (g.isNotEmpty() || saved == null) genres = g
+                    if (fresh != channels) channels = fresh
+                    AppGraph.channels = channels
+                    AppGraph.genres = genres
+                    saveLists()
+                }
                 liveLoading = false
-                backStack.clear()
-                backStack.add(Route.Home)
+                if (saved == null) {
+                    backStack.clear()
+                    backStack.add(Route.Home)
+                }
                 startKeepAlive()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 liveLoading = false
-                backStack.clear()
-                backStack.add(Route.Error(e.message ?: "Connection failed"))
+                // With saved lists showing, only a refusal by the portal (MAC not accepted) leaves them;
+                // a network hiccup just says so, and playing a channel tries the portal again.
+                if (saved != null && e !is StalkerClient.PortalSays) {
+                    showToast("Couldn't reach the portal. Showing your saved lists.")
+                } else {
+                    backStack.clear()
+                    backStack.add(Route.Error(e.message ?: "Connection failed"))
+                }
             }
         }
     }
@@ -206,16 +231,35 @@ class AppViewModel : ViewModel() {
 
     // ------------------------------------------------------------- vod
 
+    /** Categories loaded from the portal this session (saved ones are shown until then). */
+    private val categoriesFresh = mutableSetOf<VodKind>()
+
     fun ensureCategories(kind: VodKind) {
-        if (categories.containsKey(kind)) return
-        categories[kind] = emptyList()
+        if (kind in categoriesFresh) return
+        categoriesFresh += kind
+        if (!categories.containsKey(kind)) categories[kind] = emptyList()
         viewModelScope.launch {
             val cats = runCatching { client?.vodCategories(kind) }.getOrNull() ?: emptyList()
-            categories[kind] = cats
-            if (selectedCategory[kind] == null) {
-                selectedCategory[kind] = cats.firstOrNull { it.id == "*" }?.id ?: cats.firstOrNull()?.id ?: "*"
-            }
+            if (cats.isEmpty() && categories[kind].orEmpty().isNotEmpty()) { categoriesFresh -= kind; return@launch }
+            if (cats != categories[kind]) categories[kind] = cats
+            selectDefaultCategory(kind)
+            saveLists()
         }
+    }
+
+    private fun selectDefaultCategory(kind: VodKind) {
+        val cats = categories[kind].orEmpty()
+        if (selectedCategory[kind] == null || cats.none { it.id == selectedCategory[kind] }) {
+            selectedCategory[kind] = cats.firstOrNull { it.id == "*" }?.id ?: cats.firstOrNull()?.id ?: "*"
+        }
+    }
+
+    /** Saves the current lists for the next start (off the main thread). */
+    private fun saveLists() {
+        val p = activeProfile ?: return
+        val l = ListCache.Lists(genres, channels, categories[VodKind.MOVIE].orEmpty(), categories[VodKind.SERIES].orEmpty(), owner = ListCache.ownerOf(p))
+        if (l.channels.isEmpty()) return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { ListCache.save(p.id, l) }
     }
 
     fun list(kind: VodKind, cat: String): VodList = lists.getOrPut("$kind/$cat") { VodList() }
@@ -297,6 +341,7 @@ class AppViewModel : ViewModel() {
 
     fun deleteProfile(p: Profile) {
         AppGraph.profiles.delete(p.id)
+        ListCache.delete(p.id)
         if (activeProfile?.id == p.id) {
             val next = AppGraph.profiles.active
             if (next != null) connect(next) else { backStack.clear(); backStack.add(Route.EditProfile(null, true)) }

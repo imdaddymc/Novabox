@@ -19,7 +19,9 @@ the red, green, yellow or blue buttons.
 - **Long shows**: every episode is listed, even for daily shows with hundreds of episodes. Long seasons open near the episode you last watched, or at the newest ones
 - **Episode lengths** on each episode button: the portal's length when it sends one, else the length once played, else the show's usual length (marked ~). Debrid episodes show it once played
 - **Autoplay**: when a portal episode ends, the next one (or the next season's first) starts after a 10-second "Up next". Press Cancel to stop
-- **Audio and Subtitles** buttons in the player; the language you pick is remembered for the next videos
+- **Skip intro and credits, learned by ear**: while an episode plays, NovaBox takes a light audio fingerprint of its first and last five minutes. Once two episodes of a show share a stretch, that's the intro or the end credits. From then on a **Skip intro** button shows during the intro (OK jumps past it), and when the credits start, **Up next** offers the next episode (Cancel keeps watching the credits). Nothing to set up or mark, and nothing leaves the TV. It costs about 31 small FFTs per second, only during those ten minutes, and 20–150 KB per show (at most 40 shows, about 6 MB). Settings → Picture and playback turns it off. Videos whose sound goes to the TV undecoded (Dolby passthrough) can't be listened to, so they don't get it
+- **Opens straight away**: your channel list and categories are saved on the TV (about 0.1 MB for a portal with 5,800 channels) and shown at once, then refreshed from the portal in the background. If the portal can't be reached, the saved lists still work
+- **Audio and Subtitles** buttons in the player, and in the live menu (**Audio (2)** when a channel has a choice). The remote's own audio-language and subtitle keys open them too. The language you pick is remembered for the next videos
 - **Picture** settings: always play the best quality, match the TV's frame rate to the film, HDR output, and an optional light sharpen filter
 - Films and series by category, with posters, details, seasons and episodes. Shows a portal files under Movies are moved to the Series tab
   (categories named like "TV shows", "Web series", "Dramas"), so Movies keeps only films
@@ -71,7 +73,7 @@ the red, green, yellow or blue buttons.
 | ![Picture](docs/screenshots/29-picture-settings.png) Settings → Picture | ![STB settings](docs/screenshots/30-stb-settings.png) STB settings in a profile |
 | ![Icon tabs](docs/screenshots/31-icon-tabs.png) Icon tabs: the one you are on shows its name | ![Player](docs/screenshots/32-player-icons.png) Player buttons as icons |
 | ![Continue an episode](docs/screenshots/33-continue-episode.png) Continue watching picks up the episode | ![Episode lengths](docs/screenshots/34-episode-lengths.png) Episode lengths on the buttons |
-| ![Scrubbing](docs/screenshots/35-scrub-bar.png) Scrub along the progress bar; exit sits on the far right | |
+| ![Scrubbing](docs/screenshots/35-scrub-bar.png) Scrub along the progress bar; exit sits on the far right | ![Skip intro](docs/screenshots/36-skip-intro.png) Skip intro, learned from the show's sound |
 
 ## Using Surfshark with NovaBox
 

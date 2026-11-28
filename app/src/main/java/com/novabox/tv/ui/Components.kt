@@ -179,15 +179,18 @@ fun Logo(url: String, name: String, size: Dp, modifier: Modifier = Modifier) {
         modifier.size(size).clip(RoundedCornerShape(8.dp)).background(Color(0xFF222C45)),
         contentAlignment = Alignment.Center,
     ) {
-        Text(name.take(2).uppercase(), color = Palette.muted, fontWeight = FontWeight.Bold, fontSize = (size.value / 3).sp)
         // The portal's logo first; if it has none or it doesn't load, one found by the channel's name.
         val found by com.novabox.tv.data.Logos.byName.collectAsState()
         var portalFailed by remember(url) { mutableStateOf(false) }
         val shown = url.takeIf { it.isNotBlank() && !portalFailed } ?: found[name].orEmpty()
+        // The initials only while there is no logo to show (or it is still loading, or failed).
+        var loaded by remember(shown) { mutableStateOf(false) }
+        if (!loaded) Text(name.take(2).uppercase(), color = Palette.muted, fontWeight = FontWeight.Bold, fontSize = (size.value / 3).sp)
         if (shown.isNotBlank()) {
             AsyncImage(
                 model = shown, contentDescription = null, contentScale = ContentScale.Fit,
-                onError = { if (shown == url) portalFailed = true },
+                onSuccess = { loaded = true },
+                onError = { loaded = false; if (shown == url) portalFailed = true },
                 modifier = Modifier.fillMaxSize().padding(4.dp),
             )
         }
